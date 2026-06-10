@@ -26,12 +26,82 @@ bem-gestar/
 
 ---
 
+## Dados do Perfil de Paciente
+
+### Informações Pessoais
+- **Nome completo** (obrigatório)
+- **Data de nascimento**
+- **CPF** (único)
+- **Telefone**
+- **Email** (único, obrigatório)
+
+### Histórico Médico
+- **Histórico médico**: Doenças anteriores da paciente
+- **Histórico de doenças na família**: Antecedentes familiares relevantes
+
+### Dados Gestacionais
+- Semana gestacional atual
+- Data prevista do parto
+- DUM (Data da última menstruação)
+- Tipo sanguíneo
+- Altura (cm)
+- Peso pré-gestacional (kg)
+- Condições de risco pré-existentes
+
+---
+
+## Registro de Sinais Vitais e Sintomas
+
+### Sinais Vitais
+- Pressão sistólica/diastólica (mmHg)
+- Frequência cardíaca (bpm)
+- Temperatura (°C)
+- Peso (kg)
+- Saturação de oxigênio (%)
+- Glicemia (mg/dL)
+- **Horas de sono**
+
+### Sintomas
+- Dor de cabeça
+- Enjoo
+- Vômito
+- Dor abdominal
+- Sangramento
+- Inchaço (edema)
+- Visão turva
+- Dor no peito
+- Falta de ar
+- Redução dos movimentos fetais
+- Ardência ao urinar
+- Febre
+- Tontura
+- Dor lombar
+- Contrações
+- Outro (com descrição livre)
+
+---
+
 ## Como Executar
 
+### Windows
 ```bash
 # Ativar venv e iniciar servidor
-cd /home/lucaslira/bem-gestar
-venv/bin/python manage.py runserver
+cd bem-gestar
+venv\Scripts\activate
+python manage.py migrate
+python manage.py runserver
+
+# Admin disponível em: http://localhost:8000/admin/
+# API disponível em:   http://localhost:8000/api/
+```
+
+### Linux/Mac
+```bash
+# Ativar venv e iniciar servidor
+cd bem-gestar
+source venv/bin/activate
+python manage.py migrate
+python manage.py runserver
 
 # Admin disponível em: http://localhost:8000/admin/
 # API disponível em:   http://localhost:8000/api/

@@ -73,6 +73,9 @@ class PatientProfile(models.Model):
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='patient_profile')
 
+    # Personal data
+    cpf = models.CharField(max_length=14, blank=True, unique=True, verbose_name='CPF')
+
     # Gestational data
     gestational_age_weeks = models.PositiveSmallIntegerField(
         null=True, blank=True, verbose_name='Semana gestacional atual'
@@ -90,6 +93,14 @@ class PatientProfile(models.Model):
     )
     risk_conditions = models.TextField(
         blank=True, verbose_name='Condições de risco pré-existentes'
+    )
+
+    # Medical history
+    medical_history = models.TextField(
+        blank=True, verbose_name='Histórico médico (doenças anteriores)'
+    )
+    family_medical_history = models.TextField(
+        blank=True, verbose_name='Histórico de doenças na família'
     )
 
     # Linked doctor

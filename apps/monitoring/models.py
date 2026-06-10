@@ -42,6 +42,10 @@ class VitalSign(models.Model):
         max_digits=5, decimal_places=1, null=True, blank=True,
         verbose_name='Glicemia (mg/dL)'
     )
+    sleep_hours = models.DecimalField(
+        max_digits=3, decimal_places=1, null=True, blank=True,
+        verbose_name='Horas de sono'
+    )
 
     notes = models.TextField(blank=True, verbose_name='Observações')
     recorded_at = models.DateTimeField(default=timezone.now, verbose_name='Registrado em')
