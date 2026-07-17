@@ -51,6 +51,26 @@ class ConsultationListCreateView(generics.ListCreateAPIView):
             return Consultation.objects.filter(doctor=user).select_related('patient')
         return Consultation.objects.none()
 
+    def filter_queryset(self, queryset):
+        # Apply standard filters first
+        queryset = super().filter_queryset(queryset)
+        
+        # Translate frontend scheduled_at to backend scheduled_date
+        ordering = self.request.query_params.get('ordering')
+        if ordering:
+            params = [p.strip() for p in ordering.split(',')]
+            order_by_args = []
+            for p in params:
+                if p == 'scheduled_at':
+                    order_by_args.append('scheduled_date')
+                elif p == '-scheduled_at':
+                    order_by_args.append('-scheduled_date')
+                elif hasattr(queryset.model, p.replace('-', '')):
+                    order_by_args.append(p)
+            if order_by_args:
+                queryset = queryset.order_by(*order_by_args)
+        return queryset
+
     def perform_create(self, serializer):
         serializer.save(doctor=self.request.user)
 

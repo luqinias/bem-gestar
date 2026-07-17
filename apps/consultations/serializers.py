@@ -11,12 +11,13 @@ class ConsultationSerializer(serializers.ModelSerializer):
     doctor_name = serializers.CharField(source='doctor.name', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     consultation_type_display = serializers.CharField(source='get_consultation_type_display', read_only=True)
+    scheduled_at = serializers.DateTimeField(source='scheduled_date')
 
     class Meta:
         model = Consultation
         fields = [
             'id', 'patient', 'patient_name', 'doctor', 'doctor_name',
-            'scheduled_date', 'consultation_type', 'consultation_type_display',
+            'scheduled_date', 'scheduled_at', 'consultation_type', 'consultation_type_display',
             'location', 'status', 'status_display', 'notes',
             'cancellation_reason', 'cancelled_at',
             'created_at', 'updated_at',
@@ -71,12 +72,20 @@ class PrescriptionSerializer(serializers.ModelSerializer):
     doctor_name = serializers.CharField(source='doctor.name', read_only=True)
     prescription_type_display = serializers.CharField(source='get_prescription_type_display', read_only=True)
 
+    # Compatibility aliases for frontend
+    medication_name = serializers.CharField(source='title')
+    dosage = serializers.CharField(source='content')
+    start_date = serializers.DateTimeField(source='issued_at')
+    end_date = serializers.DateField(source='valid_until', allow_null=True, required=False)
+    notes = serializers.CharField(source='instructions', allow_blank=True, required=False)
+
     class Meta:
         model = Prescription
         fields = [
             'id', 'patient', 'patient_name', 'doctor', 'doctor_name',
             'consultation', 'prescription_type', 'prescription_type_display',
             'title', 'content', 'instructions', 'valid_until',
+            'medication_name', 'dosage', 'start_date', 'end_date', 'notes',
             'digital_signature', 'issued_at', 'created_at',
         ]
         read_only_fields = ['id', 'doctor', 'digital_signature', 'issued_at', 'created_at']
@@ -111,11 +120,18 @@ class ExamRequestSerializer(serializers.ModelSerializer):
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
 
+    # Compatibility aliases for frontend
+    exam_type = serializers.CharField(source='exam_name')
+    urgency = serializers.CharField(source='priority')
+    instructions = serializers.CharField(source='clinical_indication')
+    result_date = serializers.DateField(source='requested_at', default=None, read_only=True)
+
     class Meta:
         model = ExamRequest
         fields = [
             'id', 'patient', 'patient_name', 'doctor', 'doctor_name',
             'consultation', 'exam_name', 'clinical_indication',
+            'exam_type', 'urgency', 'instructions', 'result_date',
             'priority', 'priority_display', 'status', 'status_display',
             'notes', 'result_notes', 'requested_at', 'created_at',
         ]

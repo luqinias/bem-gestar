@@ -50,13 +50,23 @@ class StartConversationView(APIView):
     permission_classes = [IsPatientOrValidatedDoctor]
 
     def post(self, request):
-        other_user_id = request.data.get('other_user_id')
+        other_user_id = request.data.get('other_user_id') or request.data.get('doctor_id')
         if not other_user_id:
-            return Response({'error': 'other_user_id é obrigatório.'}, status=400)
+            return Response({'error': 'other_user_id ou doctor_id é obrigatório.'}, status=400)
 
+        other_user = None
         try:
             other_user = User.objects.get(pk=other_user_id)
         except User.DoesNotExist:
+            # Check if other_user_id corresponds to a DoctorProfile ID
+            try:
+                from apps.accounts.models import DoctorProfile
+                doctor_profile = DoctorProfile.objects.get(pk=other_user_id)
+                other_user = doctor_profile.user
+            except DoctorProfile.DoesNotExist:
+                pass
+
+        if not other_user:
             return Response({'error': 'Usuário não encontrado.'}, status=404)
 
         user = request.user

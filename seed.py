@@ -10,6 +10,9 @@ django.setup()
 from django.contrib.auth import get_user_model
 from apps.accounts.models import PatientProfile, DoctorProfile
 from apps.education.models import ContentCategory, EducationalContent
+from apps.consultations.models import Consultation, ExamRequest
+from apps.ar.models import ARModel
+from django.utils import timezone
 from datetime import date, timedelta
 
 User = get_user_model()
@@ -129,6 +132,87 @@ for data in contents:
     )
 
 print("  ✅ 4 conteúdos educativos criados")
+
+print("\n📅 Criando consultas de teste...")
+patient_user = User.objects.get(email='paciente@bemgestar.com')
+doctor_user = User.objects.get(email='medico@bemgestar.com')
+
+# scheduled tomorrow at 09:30
+tomorrow = timezone.now().replace(hour=9, minute=30, second=0, microsecond=0) + timedelta(days=1)
+if not Consultation.objects.filter(patient=patient_user, scheduled_date=tomorrow).exists():
+    Consultation.objects.create(
+        patient=patient_user,
+        doctor=doctor_user,
+        scheduled_date=tomorrow,
+        consultation_type=Consultation.ConsultationType.IN_PERSON,
+        location="Clínica BemGestar - Unidade Sul",
+        notes="Primeira consulta de retorno do segundo trimestre.",
+        status=Consultation.Status.SCHEDULED,
+    )
+    print("  ✅ Consulta agendada criada para amanhã às 09:30")
+
+# completed last week
+last_week = timezone.now().replace(hour=14, minute=0, second=0, microsecond=0) - timedelta(days=7)
+if not Consultation.objects.filter(patient=patient_user, scheduled_date=last_week).exists():
+    Consultation.objects.create(
+        patient=patient_user,
+        doctor=doctor_user,
+        scheduled_date=last_week,
+        consultation_type=Consultation.ConsultationType.IN_PERSON,
+        location="Hospital Maternidade",
+        notes="Acompanhamento mensal de rotina.",
+        status=Consultation.Status.COMPLETED,
+    )
+    print("  ✅ Consulta realizada criada (semana passada)")
+
+print("\n🧪 Criando solicitações de exame de teste...")
+if not ExamRequest.objects.filter(patient=patient_user, exam_name="Ultrassom morfológico").exists():
+    ExamRequest.objects.create(
+        patient=patient_user,
+        doctor=doctor_user,
+        exam_name="Ultrassom morfológico",
+        clinical_indication="Avaliação anatômica fetal do segundo trimestre.",
+        priority=ExamRequest.Priority.ROUTINE,
+        status=ExamRequest.Status.PENDING,
+        notes="Realizar jejum leve se indicado pelo laboratório.",
+    )
+    print("  ✅ Solicitação de Ultrassom morfológico (Pendente) criada")
+
+if not ExamRequest.objects.filter(patient=patient_user, exam_name="Exame de sangue").exists():
+    ExamRequest.objects.create(
+        patient=patient_user,
+        doctor=doctor_user,
+        exam_name="Exame de sangue",
+        clinical_indication="Hemograma completo e curva glicêmica.",
+        priority=ExamRequest.Priority.URGENT,
+        status=ExamRequest.Status.PENDING,
+        notes="Jejum de 8 horas obrigatório.",
+    )
+    print("  ✅ Solicitação de Exame de sangue (Pendente) criada")
+
+print("\n🕶️ Criando modelos 3D de Realidade Aumentada (AR)...")
+if not ARModel.objects.filter(week=20).exists():
+    ARModel.objects.create(
+        week=20,
+        baby_model='ar_models/baby_week_20.glb',
+        estimated_height_cm=25.60,
+        estimated_weight_grams=300,
+        animation='sleep_idle',
+        scale=1.00
+    )
+    print("  ✅ Modelo de AR para Semana 20 criado")
+
+if not ARModel.objects.filter(week=26).exists():
+    ARModel.objects.create(
+        week=26,
+        baby_model='ar_models/baby_week_26.glb',
+        estimated_height_cm=35.60,
+        estimated_weight_grams=760,
+        animation='sleep_idle',
+        scale=1.00
+    )
+    print("  ✅ Modelo de AR para Semana 26 criado")
+
 print("\n🎉 Seed concluído com sucesso!")
 print("\nCredenciais de acesso:")
 print("  Admin:    admin@bemgestar.com / admin123@  → /admin/")

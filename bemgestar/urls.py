@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/consultations/', include('apps.consultations.urls')),
     path('api/messaging/', include('apps.messaging.urls')),
     path('api/education/', include('apps.education.urls')),
+    path('api/ar/', include('apps.ar.urls')),
 
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
