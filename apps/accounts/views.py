@@ -207,16 +207,19 @@ class LinkDoctorView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         crm = request.data.get('crm')
-        crm_state = request.data.get('crm_state', '')
+        crm_state = request.data.get('crm_state')
         if not crm:
             return Response({'error': 'CRM é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        filter_kwargs = {
+            'crm': crm,
+            'is_crm_validated': True
+        }
+        if crm_state:
+            filter_kwargs['crm_state__iexact'] = crm_state
+
         try:
-            doctor_profile = DoctorProfile.objects.get(
-                crm=crm,
-                crm_state__iexact=crm_state,
-                is_crm_validated=True
-            )
+            doctor_profile = DoctorProfile.objects.get(**filter_kwargs)
         except DoctorProfile.DoesNotExist:
             return Response(
                 {'error': 'Médico não encontrado ou CRM não validado.'},

@@ -33,13 +33,16 @@ class SendMessageSerializer(serializers.ModelSerializer):
 class ConversationSerializer(serializers.ModelSerializer):
     patient_name = serializers.CharField(source='patient.name', read_only=True)
     doctor_name = serializers.CharField(source='doctor.name', read_only=True)
+    patient_avatar = serializers.ImageField(source='patient.avatar', read_only=True)
+    doctor_avatar = serializers.ImageField(source='doctor.avatar', read_only=True)
     last_message = MessageSerializer(read_only=True)
     unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = [
-            'id', 'patient', 'patient_name', 'doctor', 'doctor_name',
+            'id', 'patient', 'patient_name', 'patient_avatar',
+            'doctor', 'doctor_name', 'doctor_avatar',
             'last_message', 'unread_count', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'patient', 'doctor', 'created_at', 'updated_at']

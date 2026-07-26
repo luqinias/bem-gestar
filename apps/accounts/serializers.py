@@ -15,7 +15,7 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = PatientProfile
         fields = [
-            'id', 'gestational_age_weeks', 'expected_delivery_date',
+            'id', 'cpf', 'gestational_age_weeks', 'expected_delivery_date',
             'last_menstrual_period', 'blood_type', 'height_cm',
             'pre_gestational_weight_kg', 'risk_conditions',
             'doctor', 'created_at', 'updated_at',
@@ -52,6 +52,7 @@ class PatientRegisterSerializer(serializers.ModelSerializer):
     password_confirm = serializers.CharField(write_only=True)
 
     # Patient profile fields
+    cpf = serializers.CharField(required=False, max_length=14, allow_blank=True)
     gestational_age_weeks = serializers.IntegerField(required=False, allow_null=True)
     expected_delivery_date = serializers.DateField(required=False, allow_null=True)
     last_menstrual_period = serializers.DateField(required=False, allow_null=True)
@@ -64,7 +65,7 @@ class PatientRegisterSerializer(serializers.ModelSerializer):
         fields = [
             'email', 'name', 'password', 'password_confirm',
             'phone', 'date_of_birth',
-            'gestational_age_weeks', 'expected_delivery_date',
+            'cpf', 'gestational_age_weeks', 'expected_delivery_date',
             'last_menstrual_period', 'blood_type', 'height_cm',
             'pre_gestational_weight_kg',
         ]
@@ -72,13 +73,16 @@ class PatientRegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs.pop('password_confirm'):
             raise serializers.ValidationError({'password': 'As senhas não coincidem.'})
+        cpf = attrs.get('cpf')
+        if cpf and PatientProfile.objects.filter(cpf=cpf).exists():
+            raise serializers.ValidationError({'cpf': 'Este CPF já está cadastrado.'})
         return attrs
 
     def create(self, validated_data):
         profile_fields = {
             k: validated_data.pop(k, None)
             for k in [
-                'gestational_age_weeks', 'expected_delivery_date',
+                'cpf', 'gestational_age_weeks', 'expected_delivery_date',
                 'last_menstrual_period', 'blood_type', 'height_cm',
                 'pre_gestational_weight_kg',
             ]
