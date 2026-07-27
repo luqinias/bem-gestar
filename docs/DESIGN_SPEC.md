@@ -1,4 +1,4 @@
-# BemGestar - Especificação de Design Mobile
+# BemGestar - Especificação de Design Mobile - Cores e Construção
 
 ## Design System
 
