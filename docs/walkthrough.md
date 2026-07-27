@@ -1,6 +1,6 @@
 # BemGestar — Backend Django REST API
 
-## O que foi criado
+##  Descrição
 
 Backend completo de telemonitoramento gestacional usando **Django 6 + Django REST Framework + JWT**.
 
