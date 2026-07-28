@@ -58,6 +58,38 @@ class IsPatientOrValidatedDoctor(BasePermission):
         return False
 
 
+class IsDoctorOrAdmin(BasePermission):
+    """
+    Allows access to admins (always) or doctors with validated CRM.
+    Used for management actions like publishing educational content.
+    """
+    message = 'Acesso restrito a médicos validados e administradores.'
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.user.is_admin or request.user.is_staff:
+            return True
+        if request.user.is_doctor:
+            try:
+                return request.user.doctor_profile.is_crm_validated
+            except Exception:
+                return False
+        return False
+
+
+class IsAdmin(BasePermission):
+    """Allows access only to authenticated admin users."""
+    message = 'Acesso restrito a administradores.'
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            (request.user.is_admin or request.user.is_staff)
+        )
+
+
 class IsOwnerOrDoctor(BasePermission):
     """
     Object-level permission: allow patients to access own data,

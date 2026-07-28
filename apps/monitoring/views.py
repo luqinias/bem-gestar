@@ -337,7 +337,7 @@ class ClinicalDashboardView(APIView):
         # Sort by risk level and unread alerts
         dashboard_data.sort(
             key=lambda x: (
-                -(x['latest_risk_score']['score'] if x['latest_risk_score'] else 0),
+                -(float(x['latest_risk_score']['score']) if x['latest_risk_score'] else 0),
                 -x['unread_alerts_count'],
             )
         )

@@ -11,8 +11,8 @@ from apps.accounts.permissions import IsPatient, IsValidatedDoctor
 from .models import Consultation, Prescription, ExamRequest
 from .serializers import (
     ConsultationSerializer, ConsultationCreateSerializer, CancelConsultationSerializer,
-    PrescriptionSerializer, PrescriptionCreateSerializer,
-    ExamRequestSerializer, ExamRequestCreateSerializer,
+    PrescriptionSerializer, PrescriptionCreateSerializer, PrescriptionUpdateSerializer,
+    ExamRequestSerializer, ExamRequestCreateSerializer, ExamRequestUpdateSerializer,
 )
 
 _TAG = ['consultations']
@@ -31,7 +31,7 @@ class ConsultationListCreateView(generics.ListCreateAPIView):
     GET  /api/consultations/         — list consultations (patient: own; doctor: own schedule)
     POST /api/consultations/         — doctor schedules a consultation
     """
-    filterset_fields = ['status', 'consultation_type']
+    filterset_fields = ['status', 'consultation_type', 'patient']
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -89,21 +89,25 @@ class ConsultationListCreateView(generics.ListCreateAPIView):
 @extend_schema_view(
     get=extend_schema(tags=_TAG, summary='Detalhe de Consulta'),
     patch=extend_schema(tags=_TAG, summary='[Médico] Atualizar Consulta'),
+    delete=extend_schema(tags=_TAG, summary='[Médico] Excluir Consulta', description='Remove definitivamente um agendamento (ex.: cadastro incorreto). Para desmarcar uma consulta válida, prefira cancelar.'),
 )
-class ConsultationDetailView(generics.RetrieveUpdateAPIView):
+class ConsultationDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET   /api/consultations/{id}/  — get consultation detail
-    PATCH /api/consultations/{id}/  — doctor updates notes/type/date
+    GET    /api/consultations/{id}/  — get consultation detail
+    PATCH  /api/consultations/{id}/  — doctor updates notes/type/date
+    DELETE /api/consultations/{id}/  — doctor deletes the consultation record
     """
     serializer_class = ConsultationSerializer
 
     def get_permissions(self):
-        if self.request.method in ['PUT', 'PATCH']:
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
             return [IsValidatedDoctor()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return Consultation.objects.filter(doctor=user) if user.is_doctor else Consultation.objects.none()
         if user.is_patient:
             return Consultation.objects.filter(patient=user)
         elif user.is_doctor:
@@ -165,6 +169,8 @@ class PrescriptionListCreateView(generics.ListCreateAPIView):
     GET  /api/consultations/prescriptions/  — patient: own; doctor: issued
     POST /api/consultations/prescriptions/  — doctor issues a prescription
     """
+    filterset_fields = ['patient', 'prescription_type']
+
     def get_permissions(self):
         if self.request.method == 'POST':
             return [IsValidatedDoctor()]
@@ -196,21 +202,40 @@ class PrescriptionListCreateView(generics.ListCreateAPIView):
         )
 
 
-@extend_schema(tags=_TAG, summary='Detalhe de Receita')
-class PrescriptionDetailView(generics.RetrieveAPIView):
+@extend_schema_view(
+    get=extend_schema(tags=_TAG, summary='Detalhe de Receita'),
+    patch=extend_schema(tags=_TAG, summary='[Médico] Editar Receita'),
+    delete=extend_schema(tags=_TAG, summary='[Médico] Excluir Receita'),
+)
+class PrescriptionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET /api/consultations/prescriptions/{id}/
+    GET    /api/consultations/prescriptions/{id}/  — retrieve
+    PATCH  /api/consultations/prescriptions/{id}/  — doctor edits their own prescription
+    DELETE /api/consultations/prescriptions/{id}/  — doctor deletes their own prescription
     """
-    serializer_class = PrescriptionSerializer
-    permission_classes = [IsAuthenticated]
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return PrescriptionUpdateSerializer
+        return PrescriptionSerializer
+
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return [IsValidatedDoctor()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return Prescription.objects.filter(doctor=user) if user.is_doctor else Prescription.objects.none()
         if user.is_patient:
             return Prescription.objects.filter(patient=user)
         elif user.is_doctor:
             return Prescription.objects.filter(doctor=user)
         return Prescription.objects.none()
+
+    def update(self, request, *args, **kwargs):
+        super().update(request, *args, **kwargs)
+        return Response(PrescriptionSerializer(self.get_object()).data)
 
 
 # ─────────────────────────────────────────────
@@ -226,6 +251,8 @@ class ExamRequestListCreateView(generics.ListCreateAPIView):
     GET  /api/consultations/exam-requests/  — patient: own; doctor: issued
     POST /api/consultations/exam-requests/  — doctor issues an exam request
     """
+    filterset_fields = ['patient', 'status', 'priority']
+
     def get_permissions(self):
         if self.request.method == 'POST':
             return [IsValidatedDoctor()]
@@ -257,18 +284,37 @@ class ExamRequestListCreateView(generics.ListCreateAPIView):
         )
 
 
-@extend_schema(tags=_TAG, summary='Detalhe de Solicitação de Exame')
-class ExamRequestDetailView(generics.RetrieveAPIView):
+@extend_schema_view(
+    get=extend_schema(tags=_TAG, summary='Detalhe de Solicitação de Exame'),
+    patch=extend_schema(tags=_TAG, summary='[Médico] Editar/Cancelar Exame', description='Edita dados do exame ou muda o status (ex.: cancelar, marcar como realizado com resultado).'),
+    delete=extend_schema(tags=_TAG, summary='[Médico] Excluir Solicitação de Exame'),
+)
+class ExamRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET /api/consultations/exam-requests/{id}/
+    GET    /api/consultations/exam-requests/{id}/  — retrieve
+    PATCH  /api/consultations/exam-requests/{id}/  — doctor edits or changes status (e.g. cancel)
+    DELETE /api/consultations/exam-requests/{id}/  — doctor deletes their own exam request
     """
-    serializer_class = ExamRequestSerializer
-    permission_classes = [IsAuthenticated]
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return ExamRequestUpdateSerializer
+        return ExamRequestSerializer
+
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return [IsValidatedDoctor()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return ExamRequest.objects.filter(doctor=user) if user.is_doctor else ExamRequest.objects.none()
         if user.is_patient:
             return ExamRequest.objects.filter(patient=user)
         elif user.is_doctor:
             return ExamRequest.objects.filter(doctor=user)
         return ExamRequest.objects.none()
+
+    def update(self, request, *args, **kwargs):
+        super().update(request, *args, **kwargs)
+        return Response(ExamRequestSerializer(self.get_object()).data)

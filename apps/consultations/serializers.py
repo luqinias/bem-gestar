@@ -114,6 +114,16 @@ class PrescriptionCreateSerializer(serializers.ModelSerializer):
         return patient
 
 
+class PrescriptionUpdateSerializer(serializers.ModelSerializer):
+    """Used by the issuing doctor to edit a prescription."""
+    class Meta:
+        model = Prescription
+        fields = [
+            'prescription_type', 'title', 'content',
+            'instructions', 'valid_until',
+        ]
+
+
 class ExamRequestSerializer(serializers.ModelSerializer):
     patient_name = serializers.CharField(source='patient.name', read_only=True)
     doctor_name = serializers.CharField(source='doctor.name', read_only=True)
@@ -124,7 +134,7 @@ class ExamRequestSerializer(serializers.ModelSerializer):
     exam_type = serializers.CharField(source='exam_name')
     urgency = serializers.CharField(source='priority')
     instructions = serializers.CharField(source='clinical_indication')
-    result_date = serializers.DateField(source='requested_at', default=None, read_only=True)
+    result_date = serializers.DateTimeField(source='requested_at', read_only=True)
 
     class Meta:
         model = ExamRequest
@@ -159,3 +169,13 @@ class ExamRequestCreateSerializer(serializers.ModelSerializer):
             except Exception:
                 raise serializers.ValidationError('Erro ao validar paciente.')
         return patient
+
+
+class ExamRequestUpdateSerializer(serializers.ModelSerializer):
+    """Used by the issuing doctor to edit or update the status of an exam request."""
+    class Meta:
+        model = ExamRequest
+        fields = [
+            'exam_name', 'clinical_indication', 'priority',
+            'status', 'notes', 'result_notes',
+        ]

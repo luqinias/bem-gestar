@@ -1,6 +1,6 @@
 # BemGestar (Backend API)
 
-API RESTful desenvolvida em **Python** e **Django REST Framework (DRF)** para a plataforma de telemonitoramento e acompanhamento gestacional **BemGestar**. A API atua como o servidor central, processando dados clínicos, gerando alertas de riscos, gerenciando a comunicação entre médicos e gestantes, e disponibilizando metadados/modelos 3D para a simulação em Realidade Aumentada (RA).
+API RESTful desenvolvida em **Python** e **Django REST Framework (DRF)** para a plataforma de telemonitoramento e acompanhamento gestacional **BemGestar**. A API atua como o servidor central, processando dados clínicos, gerando alertas de riscos e gerenciando a comunicação entre pacientes, médicos e a administração da plataforma.
 
 ---
 
@@ -24,11 +24,12 @@ API RESTful desenvolvida em **Python** e **Django REST Framework (DRF)** para a 
 A API é modularizada seguindo as melhores práticas do Django, separada nos seguintes aplicativos dentro de `apps/`:
 
 1. **`accounts` (Contas e Autenticação)**:
-   - Gerenciamento de usuários customizados (`User`), distinguindo entre **Paciente (gestante)** e **Médico**.
+   - Gerenciamento de usuários customizados (`User`), distinguindo entre **Paciente (gestante)**, **Médico** e **Administrador**.
    - Fluxo completo de login, cadastro e autenticação JWT.
    - Perfis de usuário detalhados:
      - `PatientProfile`: Idade gestacional, tipo sanguíneo, altura, peso pré-gestacional, data da última menstruação (DUM), data provável do parto (DPP) e médico responsável associado.
-     - `DoctorProfile`: CRM, UF de atuação, especialidade (obstetrícia/ginecologia), instituição médica e status de validação de registro.
+     - `DoctorProfile`: CRM, UF de atuação, especialidade (obstetrícia/ginecologia), instituição médica e status de validação de registro (`is_crm_validated`).
+   - Endpoints administrativos (`/api/auth/admin/...`) para o administrador validar CRMs pendentes, listar médicos/pacientes e vincular pacientes a médicos.
 
 2. **`monitoring` (Acompanhamento e Sinais Vitais)**:
    - **Sinais Vitais (`VitalSign`)**: Registro de pressão arterial (sistólica/diastólica), frequência cardíaca, temperatura corporal, peso, saturação de oxigênio e glicemia.
@@ -37,9 +38,9 @@ A API é modularizada seguindo as melhores práticas do Django, separada nos seg
    - **Alertas**: Disparo automático de alertas clínicos a partir do cruzamento de valores fora dos limites saudáveis.
 
 3. **`consultations` (Agenda e Prescrições)**:
-   - Agendamento e gerenciamento de consultas pré-natal.
-   - Solicitação de exames clínicos por parte dos médicos.
-   - Emissão e armazenamento de receitas digitais.
+   - Agendamento, edição, cancelamento e exclusão de consultas pré-natal pelo médico responsável.
+   - Solicitação, edição, mudança de status (pendente/realizado/cancelado) e exclusão de exames clínicos.
+   - Emissão, edição e exclusão de receitas digitais.
 
 4. **`messaging` (Comunicação Médica/Paciente)**:
    - Canal de bate-papo (chat) assíncrono seguro entre a gestante e o seu obstetra/médico responsável para acompanhamento contínuo e esclarecimento de dúvidas.
@@ -47,11 +48,7 @@ A API é modularizada seguindo as melhores práticas do Django, separada nos seg
 5. **`education` (Biblioteca Educativa)**:
    - Biblioteca de artigos informativos categorizados (Ex: *Nutrição na Gestação*, *Exercícios*, *Saúde Mental*, *Pré-natal*, *Preparação para o Parto*, *Amamentação*).
    - Filtragem e recomendação personalizada de artigos com base na **semana gestacional** atual da paciente.
-
-6. **`ar` (Realidade Aumentada - Simulador do Feto)**:
-   - Armazenamento e fornecimento de modelos 3D em formatos compatíveis (como `.glb` e `.usdz`) correspondentes a cada semana gestacional.
-   - Metadados de crescimento (tamanho/peso estimados do bebê) e proporções físicas reais (bounding boxes) para o renderizador do aplicativo.
-   - **Telemetria de RA (`ARTelemetry`)**: Captura e análise de métricas de desempenho no uso do simulador 3D (FPS médio, tempo na experiência gestacional, capturas de tela e registros de erros/crashes por modelo/aparelho).
+   - Criação, edição e exclusão de conteúdos por médicos e administradores.
 
 ---
 
@@ -68,13 +65,15 @@ Siga os passos abaixo de acordo com seu sistema operacional para rodar a API loc
 
 ### 🐳 Passo 1: Subir o Banco de Dados (PostgreSQL)
 
-O projeto inclui um arquivo `docker-compose.yml` pré-configurado para inicializar a instância de banco de dados PostgreSQL na porta `5432`.
+O projeto inclui um arquivo `docker-compose.yml` pré-configurado para inicializar a instância de banco de dados PostgreSQL. Por padrão, o `docker-compose.yml` deste projeto mapeia o Postgres do contêiner (porta interna `5432`) para a **porta `5433` do host** (`"5433:5432"`), e não para a `5432` padrão.
 
 No terminal da pasta raiz do projeto (`bem-gestar`), execute:
 ```bash
 docker compose up -d
 ```
 > **Nota**: Caso utilize versões mais antigas do docker, utilize `docker-compose up -d`.
+
+> ⚠️ **Por que a porta 5433 e não a 5432?** Em ambientes com um PostgreSQL nativo já instalado no host (comum em instalações Windows, inclusive quando acessadas via WSL2 com `networkingMode=mirrored` no `.wslconfig`), a porta `5432` pode já estar ocupada pelo serviço nativo, causando erros de conexão (`UnicodeDecodeError`/timeout) mesmo com o contêiner rodando corretamente. Se a porta `5432` estiver livre na sua máquina, você pode alterar o mapeamento de volta para `"5432:5432"` no `docker-compose.yml` e usar `DB_PORT=5432` no `.env` — o importante é que a porta do `docker-compose.yml` e a `DB_PORT` do `.env` sejam sempre a mesma.
 
 ---
 
@@ -117,16 +116,44 @@ Na pasta `bem-gestar/bem-gestar/`, verifique ou crie o arquivo `.env` com base n
 ```env
 SECRET_KEY=django-insecure-change-me
 DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1,10.0.2.2
+ALLOWED_HOSTS=localhost,127.0.0.1,10.0.2.2,0.0.0.0
 
 DB_ENGINE=django.db.backends.postgresql
 DB_NAME=bemgestar_db
 DB_USER=bemgestar_user
 DB_PASSWORD=bemgestar_password
 DB_HOST=127.0.0.1
-DB_PORT=5432
+DB_PORT=5433
 ```
-*Observação: A rota de host `10.0.2.2` é necessária para permitir que o emulador do Android no Windows/Linux consiga fazer requisições HTTP para a API local (localhost do computador).*
+
+> ⚠️ **`DB_PORT` deve ser igual à porta que você mapeou no `docker-compose.yml`** (veja o Passo 1). Neste projeto o padrão é `5433`. Se você alterou o `docker-compose.yml` para usar a porta `5432`, ajuste `DB_PORT=5432` aqui também.
+
+> ⚠️ **`SECRET_KEY`**: o valor `django-insecure-change-me` é só um placeholder de exemplo — nunca use uma chave fraca/previsível, mesmo em desenvolvimento (o Django emite um aviso `InsecureKeyLengthWarning` para chaves curtas). Gere uma chave forte com:
+> ```bash
+> python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+> ```
+> Trocar o `SECRET_KEY` invalida todos os tokens JWT emitidos anteriormente — usuários logados precisarão entrar novamente.
+
+*Observação: A rota de host `10.0.2.2` é necessária para permitir que o emulador do Android no Windows/Linux consiga fazer requisições HTTP para a API local (localhost do computador). O `0.0.0.0` é necessário para aceitar requisições vindas de outros dispositivos na rede (celular físico via Expo Go) quando o servidor é iniciado com `python manage.py runserver 0.0.0.0:8000` (Passo 5).*
+
+---
+
+### 🌐 Conectando o Frontend (Expo/React Native) a este Backend
+
+O app mobile (`front-bem-gestar`) precisa saber o IP e a porta onde esta API está rodando, configurados na variável `EXPO_PUBLIC_API_BASE_URL` do `.env` do frontend. **A porta é sempre `8000`** (a porta do `runserver`, não a do Postgres). O IP depende de como o frontend vai se conectar:
+
+| Cenário | IP a usar no `.env` do frontend |
+|---|---|
+| Emulador Android (no mesmo PC do backend) | `10.0.2.2` |
+| Simulador iOS (macOS, no mesmo Mac do backend) | `localhost` |
+| Celular físico via Expo Go (mesma rede Wi-Fi) | IP local (LAN) da máquina que roda o backend, ex: `192.168.15.4` |
+
+Para descobrir o IP local (LAN) da máquina que roda o backend:
+- **Windows (PowerShell/CMD)**: `ipconfig` → procure o "Endereço IPv4" do adaptador Wi-Fi/Ethernet ativo.
+- **Linux/macOS**: `hostname -I` ou `ifconfig` / `ip addr`.
+- **WSL2 com `networkingMode=mirrored`** (`.wslconfig`): o WSL2 compartilha a interface de rede do Windows, então o IP LAN do Windows (visto pelo `ipconfig` no Windows) é o mesmo a usar — não é necessário nenhum IP especial do WSL. Sem o modo mirrored (NAT padrão), o WSL2 tem seu próprio IP interno (via `ip addr` dentro do WSL) que muda a cada reinício e normalmente **não é alcançável** por um celular físico na rede — por isso o modo mirrored (ou o roteamento manual de portas) é recomendado para testar em dispositivo físico com o backend rodando dentro do WSL2.
+
+Veja também o [README do frontend](../front-bem-gestar/README.md) para o passo a passo completo de configuração do `.env` do app.
 
 ---
 

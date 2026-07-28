@@ -66,6 +66,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     def is_doctor(self):
         return self.user_type == self.UserType.DOCTOR
 
+    @property
+    def is_admin(self):
+        return self.user_type == self.UserType.ADMIN
+
 
 class PatientProfile(models.Model):
     """
@@ -74,7 +78,7 @@ class PatientProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='patient_profile')
 
     # Personal data
-    cpf = models.CharField(max_length=14, blank=True, unique=True, verbose_name='CPF')
+    cpf = models.CharField(max_length=14, blank=True, null=True, unique=True, verbose_name='CPF')
 
     # Gestational data
     gestational_age_weeks = models.PositiveSmallIntegerField(

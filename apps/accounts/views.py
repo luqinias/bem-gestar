@@ -12,6 +12,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import DoctorProfile, PatientProfile
+from .permissions import IsAdmin
 from .serializers import (
     PatientRegisterSerializer,
     DoctorRegisterSerializer,
@@ -19,6 +20,10 @@ from .serializers import (
     UserSerializer,
     UpdateProfileSerializer,
     DoctorProfileSerializer,
+    AdminDoctorSerializer,
+    AdminValidateDoctorSerializer,
+    AdminPatientSerializer,
+    AdminLinkPatientSerializer,
 )
 
 User = get_user_model()
@@ -47,7 +52,7 @@ class PatientRegisterView(generics.CreateAPIView):
             'message': 'Cadastro realizado com sucesso.',
             'access': str(refresh.access_token),
             'refresh': str(refresh),
-            'user': UserSerializer(user).data,
+            'user': UserSerializer(user, context={'request': request}).data,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -75,7 +80,7 @@ class DoctorRegisterView(generics.CreateAPIView):
             ),
             'access': str(refresh.access_token),
             'refresh': str(refresh),
-            'user': UserSerializer(user).data,
+            'user': UserSerializer(user, context={'request': request}).data,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -102,7 +107,7 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
 
     def put(self, request):
@@ -113,11 +118,12 @@ class MeView(APIView):
 
     def _update(self, request, partial=False):
         serializer = UpdateProfileSerializer(
-            request.user, data=request.data, partial=partial
+            request.user, data=request.data, partial=partial,
+            context={'request': request},
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(UserSerializer(request.user).data)
+        return Response(UserSerializer(request.user, context={'request': request}).data)
 
 
 @extend_schema(tags=_AUTH_TAG, summary='Logout', description='Invalida o refresh token (blacklist). O access token continuará válido até expirar.')
@@ -233,3 +239,128 @@ class LinkDoctorView(APIView):
             'message': f'Vinculado ao(à) Dr(a). {doctor_profile.user.name} com sucesso.',
             'doctor': DoctorProfileSerializer(doctor_profile).data,
         })
+
+
+# ─────────────────────────────────────────────
+# Admin — CRM validation & oversight
+# ─────────────────────────────────────────────
+
+@extend_schema(tags=_AUTH_TAG, summary='[Admin] Visão Geral', description='Contadores gerais de médicos, pacientes e validações de CRM pendentes.')
+class AdminOverviewView(APIView):
+    """
+    GET /api/auth/admin/overview/
+    Admin-only: high-level counters for oversight.
+    """
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        total_doctors = DoctorProfile.objects.count()
+        validated_doctors = DoctorProfile.objects.filter(is_crm_validated=True).count()
+        total_patients = PatientProfile.objects.count()
+        unlinked_patients = PatientProfile.objects.filter(doctor__isnull=True).count()
+        return Response({
+            'total_doctors': total_doctors,
+            'validated_doctors': validated_doctors,
+            'pending_doctors': total_doctors - validated_doctors,
+            'total_patients': total_patients,
+            'linked_patients': total_patients - unlinked_patients,
+            'unlinked_patients': unlinked_patients,
+        })
+
+
+@extend_schema(tags=_AUTH_TAG, summary='[Admin] Listar Médicos', description='Lista todos os médicos com status de validação de CRM e pacientes vinculadas. Filtrável por ?is_crm_validated=true|false.')
+class AdminDoctorListView(generics.ListAPIView):
+    """
+    GET /api/auth/admin/doctors/
+    Admin-only: list all doctors, regardless of validation status.
+    """
+    serializer_class = AdminDoctorSerializer
+    permission_classes = [IsAdmin]
+    pagination_class = None
+    filterset_fields = ['is_crm_validated']
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return DoctorProfile.objects.none()
+        return (
+            DoctorProfile.objects
+            .select_related('user')
+            .prefetch_related('patients__user')
+            .order_by('is_crm_validated', '-created_at')
+        )
+
+
+@extend_schema_view(
+    get=extend_schema(tags=_AUTH_TAG, summary='[Admin] Detalhe do Médico'),
+    patch=extend_schema(tags=_AUTH_TAG, summary='[Admin] Validar/Revogar CRM', description='Atualiza is_crm_validated e validation_notes. Marca validation_date automaticamente.'),
+)
+class AdminDoctorDetailView(generics.RetrieveUpdateAPIView):
+    """
+    GET   /api/auth/admin/doctors/{id}/  — full doctor detail (id = DoctorProfile pk)
+    PATCH /api/auth/admin/doctors/{id}/  — { is_crm_validated, validation_notes? }
+    """
+    permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return DoctorProfile.objects.none()
+        return DoctorProfile.objects.select_related('user').prefetch_related('patients__user')
+
+    def get_serializer_class(self):
+        if self.request.method in ('PATCH', 'PUT'):
+            return AdminValidateDoctorSerializer
+        return AdminDoctorSerializer
+
+    def update(self, request, *args, **kwargs):
+        super().update(request, *args, **kwargs)
+        instance = self.get_object()
+        return Response(AdminDoctorSerializer(instance).data)
+
+
+@extend_schema(tags=_AUTH_TAG, summary='[Admin] Listar Pacientes', description='Lista todas as pacientes com o médico vinculado (se houver).')
+class AdminPatientListView(generics.ListAPIView):
+    """
+    GET /api/auth/admin/patients/
+    Admin-only: list all patients and their linked doctor.
+    """
+    serializer_class = AdminPatientSerializer
+    permission_classes = [IsAdmin]
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return PatientProfile.objects.none()
+        return (
+            PatientProfile.objects
+            .select_related('user', 'doctor__user')
+            .order_by('-created_at')
+        )
+
+
+@extend_schema_view(
+    get=extend_schema(tags=_AUTH_TAG, summary='[Admin] Detalhe da Paciente'),
+    patch=extend_schema(tags=_AUTH_TAG, summary='[Admin] Vincular/Desvincular Médico', description='Cria ou remove o relacionamento entre a paciente e um médico. Envie { "doctor": <id do DoctorProfile> } para vincular ou { "doctor": null } para desvincular.'),
+)
+class AdminPatientDetailView(generics.RetrieveUpdateAPIView):
+    """
+    GET   /api/auth/admin/patients/{id}/  — full patient detail (id = User pk)
+    PATCH /api/auth/admin/patients/{id}/  — { doctor: <DoctorProfile id> | null }
+    """
+    permission_classes = [IsAdmin]
+    lookup_field = 'user__id'
+    lookup_url_kwarg = 'pk'
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return PatientProfile.objects.none()
+        return PatientProfile.objects.select_related('user', 'doctor__user')
+
+    def get_serializer_class(self):
+        if self.request.method in ('PATCH', 'PUT'):
+            return AdminLinkPatientSerializer
+        return AdminPatientSerializer
+
+    def update(self, request, *args, **kwargs):
+        super().update(request, *args, **kwargs)
+        instance = self.get_object()
+        return Response(AdminPatientSerializer(instance).data)
