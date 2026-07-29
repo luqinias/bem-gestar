@@ -140,6 +140,8 @@ DB_PORT=5433
 
 ### 🌐 Conectando o Frontend (Expo/React Native) a este Backend
 
+> **Nota**: A API já está publicada na nuvem (Render) e o `.env` do frontend já vem configurado apontando para ela por padrão — quem só quer testar o app mobile não precisa rodar este backend localmente (veja o "Teste rápido" no [README do frontend](../front-bem-gestar/README.md)). O passo abaixo só é necessário se você for desenvolver/depurar a API rodando-a localmente.
+
 O app mobile (`front-bem-gestar`) precisa saber o IP e a porta onde esta API está rodando, configurados na variável `EXPO_PUBLIC_API_BASE_URL` do `.env` do frontend. **A porta é sempre `8000`** (a porta do `runserver`, não a do Postgres). O IP depende de como o frontend vai se conectar:
 
 | Cenário | IP a usar no `.env` do frontend |
