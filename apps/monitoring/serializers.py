@@ -2,7 +2,7 @@
 Serializers for monitoring app.
 """
 from rest_framework import serializers
-from .models import VitalSign, Symptom, RiskScore, Alert
+from .models import VitalSign, Symptom, RiskScore, Notification
 
 
 class VitalSignSerializer(serializers.ModelSerializer):
@@ -81,24 +81,24 @@ class RiskScoreSerializer(serializers.ModelSerializer):
         ]
 
 
-class AlertSerializer(serializers.ModelSerializer):
+class NotificationSerializer(serializers.ModelSerializer):
     patient_name = serializers.CharField(source='patient.name', read_only=True)
-    alert_type_display = serializers.CharField(source='get_alert_type_display', read_only=True)
+    notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
     severity_display = serializers.CharField(source='get_severity_display', read_only=True)
 
     class Meta:
-        model = Alert
+        model = Notification
         fields = [
             'id', 'patient', 'patient_name',
-            'alert_type', 'alert_type_display',
+            'notification_type', 'notification_type_display',
             'severity', 'severity_display',
             'title', 'message',
             'vital_sign', 'symptom', 'risk_score',
-            'read_by_patient', 'read_by_doctor',
+            'read',
             'created_at',
         ]
         read_only_fields = [
-            'id', 'patient', 'alert_type', 'severity', 'title', 'message',
+            'id', 'patient', 'notification_type', 'severity', 'title', 'message',
             'vital_sign', 'symptom', 'risk_score', 'created_at'
         ]
 

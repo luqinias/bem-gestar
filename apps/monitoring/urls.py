@@ -6,10 +6,11 @@ from .views import (
     VitalSignListCreateView,
     VitalSignDetailView,
     SymptomListCreateView,
+    SymptomDetailView,
     RiskScoreListView,
     LatestRiskScoreView,
-    AlertListView,
-    MarkAlertReadView,
+    NotificationListView,
+    MarkNotificationReadView,
     ClinicalDashboardView,
     PatientTimelineView,
 )
@@ -21,14 +22,15 @@ urlpatterns = [
 
     # Symptoms
     path('symptoms/', SymptomListCreateView.as_view(), name='symptoms-list'),
+    path('symptoms/<int:pk>/', SymptomDetailView.as_view(), name='symptom-detail'),
 
     # Risk Score
     path('risk-score/', RiskScoreListView.as_view(), name='risk-score-list'),
     path('risk-score/latest/', LatestRiskScoreView.as_view(), name='risk-score-latest'),
 
-    # Alerts
-    path('alerts/', AlertListView.as_view(), name='alerts-list'),
-    path('alerts/<int:pk>/read/', MarkAlertReadView.as_view(), name='alert-read'),
+    # Notifications
+    path('notifications/', NotificationListView.as_view(), name='notifications-list'),
+    path('notifications/<int:pk>/read/', MarkNotificationReadView.as_view(), name='notification-read'),
 
     # Dashboard (Doctor)
     path('dashboard/', ClinicalDashboardView.as_view(), name='clinical-dashboard'),

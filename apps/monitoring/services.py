@@ -193,117 +193,160 @@ def _determine_risk_level(score):
     return RiskScore.RiskLevel.LOW
 
 
+def _linked_doctor_user(patient):
+    """Returns the User of the patient's linked doctor, or None."""
+    try:
+        doctor_profile = patient.patient_profile.doctor
+        return doctor_profile.user if doctor_profile else None
+    except Exception:
+        return None
+
+
+def _create_notification_pair(
+    patient, notification_type, severity,
+    patient_title, patient_message, doctor_title, doctor_message,
+    **related
+):
+    """
+    Creates one Notification row for the patient (patient-voiced copy) and,
+    if she has a linked doctor, a second row for that doctor (doctor-voiced
+    copy) — each is its own DB record scoped to its recipient, instead of a
+    single row shared/read by both.
+    """
+    from apps.monitoring.models import Notification
+
+    created = [Notification.objects.create(
+        recipient=patient,
+        patient=patient,
+        notification_type=notification_type,
+        severity=severity,
+        title=patient_title,
+        message=patient_message,
+        **related,
+    )]
+
+    doctor_user = _linked_doctor_user(patient)
+    if doctor_user:
+        created.append(Notification.objects.create(
+            recipient=doctor_user,
+            patient=patient,
+            notification_type=notification_type,
+            severity=severity,
+            title=doctor_title,
+            message=doctor_message,
+            **related,
+        ))
+
+    return created
+
+
 def check_and_create_alerts(vital_sign=None, symptom=None, patient=None, risk_score_obj=None):
     """
-    Analyze new data and create alerts when clinical thresholds are exceeded.
+    Analyze new data and create notifications when clinical thresholds are
+    exceeded — one row per recipient (patient and, if linked, her doctor).
     """
-    from apps.monitoring.models import Alert
-    alerts_created = []
+    from apps.monitoring.models import Notification
+    notifications_created = []
     t = THRESHOLDS
 
     if vital_sign:
         sys_bp = vital_sign.systolic_bp
         dia_bp = vital_sign.diastolic_bp
+        name = vital_sign.patient.name
 
         # Severe hypertension alert
         if sys_bp and sys_bp >= t['systolic_bp_very_high']:
-            alert = Alert.objects.create(
-                patient=vital_sign.patient,
-                alert_type=Alert.AlertType.HYPERTENSION,
-                severity=Alert.Severity.URGENT,
-                title='Hipertensão Grave Detectada',
-                message=(
-                    f'Pressão arterial sistólica de {sys_bp} mmHg detectada. '
-                    'Procure atendimento médico imediatamente.'
-                ),
+            notifications_created += _create_notification_pair(
+                vital_sign.patient, Notification.NotificationType.HYPERTENSION, Notification.Severity.URGENT,
+                'Hipertensão Grave Detectada',
+                f'Pressão arterial sistólica de {sys_bp} mmHg detectada. Procure atendimento médico imediatamente.',
+                f'Hipertensão Grave — {name}',
+                f'{name} registrou pressão arterial sistólica de {sys_bp} mmHg (hipertensão grave).',
                 vital_sign=vital_sign,
             )
-            alerts_created.append(alert)
 
         elif sys_bp and sys_bp >= t['systolic_bp_high']:
-            alert = Alert.objects.create(
-                patient=vital_sign.patient,
-                alert_type=Alert.AlertType.HYPERTENSION,
-                severity=Alert.Severity.WARNING,
-                title='Pressão Arterial Elevada',
-                message=f'Pressão arterial sistólica de {sys_bp} mmHg. Monitore e informe seu médico.',
+            notifications_created += _create_notification_pair(
+                vital_sign.patient, Notification.NotificationType.HYPERTENSION, Notification.Severity.WARNING,
+                'Pressão Arterial Elevada',
+                f'Pressão arterial sistólica de {sys_bp} mmHg. Monitore e informe seu médico.',
+                f'Pressão Arterial Elevada — {name}',
+                f'{name} registrou pressão arterial sistólica de {sys_bp} mmHg.',
                 vital_sign=vital_sign,
             )
-            alerts_created.append(alert)
 
         # Hypotension alert
         if sys_bp and sys_bp <= t['systolic_bp_low']:
-            alert = Alert.objects.create(
-                patient=vital_sign.patient,
-                alert_type=Alert.AlertType.HYPOTENSION,
-                severity=Alert.Severity.WARNING,
-                title='Pressão Arterial Baixa',
-                message=f'Pressão arterial sistólica de {sys_bp} mmHg. Hidrate-se e descanse.',
+            notifications_created += _create_notification_pair(
+                vital_sign.patient, Notification.NotificationType.HYPOTENSION, Notification.Severity.WARNING,
+                'Pressão Arterial Baixa',
+                f'Pressão arterial sistólica de {sys_bp} mmHg. Hidrate-se e descanse.',
+                f'Pressão Arterial Baixa — {name}',
+                f'{name} registrou pressão arterial sistólica de {sys_bp} mmHg (hipotensão).',
                 vital_sign=vital_sign,
             )
-            alerts_created.append(alert)
 
         # Low oxygen saturation
         if vital_sign.oxygen_saturation and vital_sign.oxygen_saturation <= t['oxygen_very_low']:
-            alert = Alert.objects.create(
-                patient=vital_sign.patient,
-                alert_type=Alert.AlertType.LOW_OXYGEN,
-                severity=Alert.Severity.URGENT,
-                title='Saturação de Oxigênio Crítica',
-                message=(
-                    f'Saturação de {vital_sign.oxygen_saturation}%. '
-                    'Procure atendimento médico urgente.'
-                ),
+            notifications_created += _create_notification_pair(
+                vital_sign.patient, Notification.NotificationType.LOW_OXYGEN, Notification.Severity.URGENT,
+                'Saturação de Oxigênio Crítica',
+                f'Saturação de {vital_sign.oxygen_saturation}%. Procure atendimento médico urgente.',
+                f'Saturação de Oxigênio Crítica — {name}',
+                f'{name} registrou saturação de oxigênio de {vital_sign.oxygen_saturation}%.',
                 vital_sign=vital_sign,
             )
-            alerts_created.append(alert)
 
         # Fever
         if vital_sign.temperature_celsius:
             temp = float(vital_sign.temperature_celsius)
             if temp >= t['temperature_high']:
-                severity = Alert.Severity.URGENT if temp >= t['temperature_very_high'] else Alert.Severity.WARNING
-                alert = Alert.objects.create(
-                    patient=vital_sign.patient,
-                    alert_type=Alert.AlertType.FEVER,
-                    severity=severity,
-                    title='Febre Detectada',
-                    message=f'Temperatura de {temp}°C. Informe seu médico.',
+                severity = Notification.Severity.URGENT if temp >= t['temperature_very_high'] else Notification.Severity.WARNING
+                notifications_created += _create_notification_pair(
+                    vital_sign.patient, Notification.NotificationType.FEVER, severity,
+                    'Febre Detectada',
+                    f'Temperatura de {temp}°C. Informe seu médico.',
+                    f'Febre Detectada — {name}',
+                    f'{name} registrou temperatura de {temp}°C.',
                     vital_sign=vital_sign,
                 )
-                alerts_created.append(alert)
 
     if symptom:
         # Severe symptoms always trigger alerts
         if symptom.severity == 'severe' or symptom.symptom_type in HIGH_RISK_SYMPTOMS:
-            alert = Alert.objects.create(
-                patient=symptom.patient,
-                alert_type=Alert.AlertType.SEVERE_SYMPTOM,
-                severity=Alert.Severity.URGENT if symptom.severity == 'severe' else Alert.Severity.WARNING,
-                title=f'Sintoma Importante: {symptom.get_symptom_type_display()}',
-                message=(
+            name = symptom.patient.name
+            notifications_created += _create_notification_pair(
+                symptom.patient, Notification.NotificationType.SEVERE_SYMPTOM,
+                Notification.Severity.URGENT if symptom.severity == 'severe' else Notification.Severity.WARNING,
+                f'Sintoma Importante: {symptom.get_symptom_type_display()}',
+                (
                     f'Você registrou {symptom.get_symptom_type_display()} '
-                    f'com intensidade {symptom.get_severity_display()}. '
-                    'Informe seu médico.'
+                    f'com intensidade {symptom.get_severity_display()}. Informe seu médico.'
+                ),
+                f'Sintoma Importante: {symptom.get_symptom_type_display()} — {name}',
+                (
+                    f'{name} registrou {symptom.get_symptom_type_display()} '
+                    f'com intensidade {symptom.get_severity_display()}.'
                 ),
                 symptom=symptom,
             )
-            alerts_created.append(alert)
 
     if risk_score_obj and risk_score_obj.risk_level in ['high', 'critical']:
-        severity = Alert.Severity.URGENT if risk_score_obj.risk_level == 'critical' else Alert.Severity.WARNING
-        alert = Alert.objects.create(
-            patient=risk_score_obj.patient,
-            alert_type=Alert.AlertType.HIGH_RISK_SCORE,
-            severity=severity,
-            title=f'Score de Risco {risk_score_obj.get_risk_level_display()}',
-            message=(
+        severity = Notification.Severity.URGENT if risk_score_obj.risk_level == 'critical' else Notification.Severity.WARNING
+        name = risk_score_obj.patient.name
+        notifications_created += _create_notification_pair(
+            risk_score_obj.patient, Notification.NotificationType.HIGH_RISK_SCORE, severity,
+            f'Score de Risco {risk_score_obj.get_risk_level_display()}',
+            (
                 f'Seu score de risco gestacional está em {risk_score_obj.score} '
-                f'({risk_score_obj.get_risk_level_display()}). '
-                'Entre em contato com seu médico.'
+                f'({risk_score_obj.get_risk_level_display()}). Entre em contato com seu médico.'
+            ),
+            f'Score de Risco {risk_score_obj.get_risk_level_display()} — {name}',
+            (
+                f'O score de risco gestacional de {name} está em {risk_score_obj.score} '
+                f'({risk_score_obj.get_risk_level_display()}).'
             ),
             risk_score=risk_score_obj,
         )
-        alerts_created.append(alert)
 
-    return alerts_created
+    return notifications_created

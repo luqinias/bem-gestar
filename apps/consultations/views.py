@@ -150,10 +150,7 @@ class CancelConsultationView(APIView):
         serializer.is_valid(raise_exception=True)
         consultation.cancel(cancelled_by=user, reason=serializer.validated_data.get('reason', ''))
 
-        return Response({
-            'message': 'Consulta cancelada com sucesso.',
-            'consultation': ConsultationSerializer(consultation).data,
-        })
+        return Response(ConsultationSerializer(consultation).data)
 
 
 # ─────────────────────────────────────────────

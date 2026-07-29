@@ -281,6 +281,16 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = ['name', 'phone', 'date_of_birth', 'avatar', 'patient_profile', 'doctor_profile']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Bind nested profile instances so their UniqueValidators (cpf/crm)
+        # exclude the current record instead of rejecting unchanged values.
+        user = self.instance
+        if user is not None and getattr(user, 'is_patient', False):
+            self.fields['patient_profile'].instance = getattr(user, 'patient_profile', None)
+        if user is not None and getattr(user, 'is_doctor', False):
+            self.fields['doctor_profile'].instance = getattr(user, 'doctor_profile', None)
+
     def update(self, instance, validated_data):
         patient_data = validated_data.pop('patient_profile', None)
         doctor_data = validated_data.pop('doctor_profile', None)

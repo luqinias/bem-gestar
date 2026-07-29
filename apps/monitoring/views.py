@@ -1,5 +1,5 @@
 """
-Views for monitoring app — vital signs, symptoms, risk scores, alerts, dashboard.
+Views for monitoring app — vital signs, symptoms, risk scores, notifications, dashboard.
 """
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -12,10 +12,10 @@ from rest_framework.views import APIView
 _TAG = ['monitoring']
 
 from apps.accounts.permissions import IsPatient, IsValidatedDoctor, IsOwnerOrDoctor
-from .models import VitalSign, Symptom, RiskScore, Alert
+from .models import VitalSign, Symptom, RiskScore, Notification
 from .serializers import (
     VitalSignSerializer, SymptomSerializer,
-    RiskScoreSerializer, AlertSerializer, DashboardSerializer,
+    RiskScoreSerializer, NotificationSerializer, DashboardSerializer,
 )
 from .services import calculate_risk_score, check_and_create_alerts
 
@@ -151,6 +151,30 @@ class SymptomListCreateView(generics.ListCreateAPIView):
         )
 
 
+@extend_schema(tags=_TAG, summary='Detalhe de Sintoma')
+class SymptomDetailView(generics.RetrieveAPIView):
+    """
+    GET /api/monitoring/symptoms/{id}/
+    """
+    serializer_class = SymptomSerializer
+    permission_classes = [IsAuthenticated, IsOwnerOrDoctor]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Symptom.objects.none()
+        user = self.request.user
+        if user.is_patient:
+            return Symptom.objects.filter(patient=user)
+        elif user.is_doctor:
+            try:
+                doctor = user.doctor_profile
+                patient_ids = doctor.patients.values_list('user_id', flat=True)
+                return Symptom.objects.filter(patient_id__in=patient_ids)
+            except Exception:
+                return Symptom.objects.none()
+        return Symptom.objects.none()
+
+
 # ─────────────────────────────────────────────
 # Risk Score
 # ─────────────────────────────────────────────
@@ -212,67 +236,41 @@ class LatestRiskScoreView(APIView):
 
 
 # ─────────────────────────────────────────────
-# Alerts
+# Notifications
 # ─────────────────────────────────────────────
 
-@extend_schema(tags=_TAG, summary='Listar Alertas', description='Alertas clínicos gerados automaticamente pelo sistema. Filtrável por alert_type, severity e read_by_patient.')
-class AlertListView(generics.ListAPIView):
+@extend_schema(tags=_TAG, summary='Listar Notificações', description='Notificações do usuário autenticado. Filtrável por notification_type, severity e read.')
+class NotificationListView(generics.ListAPIView):
     """
-    GET /api/monitoring/alerts/
-    Patients see own alerts. Doctors see alerts of linked patients.
+    GET /api/monitoring/notifications/
+    Each user only ever sees their own notification rows.
     """
-    serializer_class = AlertSerializer
+    serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
-    filterset_fields = ['alert_type', 'severity', 'read_by_patient']
+    filterset_fields = ['notification_type', 'severity', 'read']
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
-            return Alert.objects.none()
-        user = self.request.user
-        if user.is_patient:
-            return Alert.objects.filter(patient=user)
-        elif user.is_doctor:
-            try:
-                doctor = user.doctor_profile
-                patient_ids = doctor.patients.values_list('user_id', flat=True)
-                return Alert.objects.filter(patient_id__in=patient_ids)
-            except Exception:
-                return Alert.objects.none()
-        return Alert.objects.none()
+            return Notification.objects.none()
+        return Notification.objects.filter(recipient=self.request.user)
 
 
-@extend_schema(tags=_TAG, summary='Marcar Alerta como Lido')
-class MarkAlertReadView(APIView):
+@extend_schema(tags=_TAG, summary='Marcar Notificação como Lida')
+class MarkNotificationReadView(APIView):
     """
-    POST /api/monitoring/alerts/{id}/read/
-    Mark an alert as read.
+    POST /api/monitoring/notifications/{id}/read/
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        user = request.user
         try:
-            alert = Alert.objects.get(pk=pk)
-        except Alert.DoesNotExist:
-            return Response({'error': 'Alerta não encontrado.'}, status=404)
+            notification = Notification.objects.get(pk=pk, recipient=request.user)
+        except Notification.DoesNotExist:
+            return Response({'error': 'Notificação não encontrada.'}, status=404)
 
-        if user.is_patient and alert.patient == user:
-            alert.read_by_patient = True
-            alert.save(update_fields=['read_by_patient'])
-        elif user.is_doctor:
-            try:
-                doctor = user.doctor_profile
-                if alert.patient.patient_profile.doctor == doctor:
-                    alert.read_by_doctor = True
-                    alert.save(update_fields=['read_by_doctor'])
-                else:
-                    return Response(status=status.HTTP_403_FORBIDDEN)
-            except Exception:
-                return Response(status=status.HTTP_403_FORBIDDEN)
-        else:
-            return Response(status=status.HTTP_403_FORBIDDEN)
-
-        return Response({'message': 'Alerta marcado como lido.'})
+        notification.read = True
+        notification.save(update_fields=['read'])
+        return Response({'message': 'Notificação marcada como lida.'})
 
 
 # ─────────────────────────────────────────────
@@ -310,8 +308,8 @@ class ClinicalDashboardView(APIView):
             except VitalSign.DoesNotExist:
                 latest_vitals = None
 
-            unread_alerts = Alert.objects.filter(
-                patient=patient_user, read_by_doctor=False
+            unread_alerts = Notification.objects.filter(
+                recipient=request.user, patient=patient_user, read=False
             ).count()
 
             # Last activity: most recent vital sign or symptom
