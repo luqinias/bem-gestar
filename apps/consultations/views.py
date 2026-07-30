@@ -83,9 +83,10 @@ class ConsultationListCreateView(generics.ListCreateAPIView):
             doctor=consultation.doctor,
             notification_type='appointment_scheduled',
             severity='info',
-            patient_title='📅 Consulta Agendada',
+            patient_title='Consulta Agendada',
             patient_message=f'Consulta agendada para {dt_str} com Dr(a). {consultation.doctor.name}.'
         )
+
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data, context={'request': request})
@@ -136,7 +137,7 @@ class ConsultationDetailView(generics.RetrieveUpdateDestroyAPIView):
             doctor=consultation.doctor,
             notification_type='appointment_updated',
             severity='info',
-            patient_title='✏️ Consulta Alterada',
+            patient_title='Consulta Alterada',
             patient_message=f'Sua consulta com Dr(a). {consultation.doctor.name} foi alterada para {dt_str}.'
         )
         return response
@@ -184,7 +185,7 @@ class CancelConsultationView(APIView):
                 doctor=consultation.doctor,
                 notification_type='appointment_cancelled',
                 severity='warning',
-                doctor_title=f'❌ Consulta Cancelada — {consultation.patient.name}',
+                doctor_title=f'Consulta Cancelada — {consultation.patient.name}',
                 doctor_message=f'A paciente {consultation.patient.name} cancelou a consulta de {dt_str}.'
             )
         else:
@@ -193,11 +194,12 @@ class CancelConsultationView(APIView):
                 doctor=consultation.doctor,
                 notification_type='appointment_cancelled',
                 severity='warning',
-                patient_title='❌ Consulta Cancelada',
+                patient_title='Consulta Cancelada',
                 patient_message=f'Sua consulta agendada para {dt_str} foi cancelada pelo médico.'
             )
 
         return Response(ConsultationSerializer(consultation).data)
+
 
 
 # ─────────────────────────────────────────────
@@ -322,7 +324,7 @@ class ExamRequestListCreateView(generics.ListCreateAPIView):
             doctor=exam_req.doctor,
             notification_type='exam_requested',
             severity='info',
-            title='🧪 Novo Exame Solicitado',
+            title='Novo Exame Solicitado',
             message=f'O Dr(a). {exam_req.doctor.name} solicitou o exame: {exam_req.exam_name}.'
         )
 
@@ -376,8 +378,9 @@ class ExamRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
                 doctor=exam_req.doctor,
                 notification_type='exam_result',
                 severity='info',
-                title='📋 Resultado de Exame Disponível',
+                title='Resultado de Exame Disponível',
                 message=f'O resultado do seu exame "{exam_req.exam_name}" foi disponibilizado.'
             )
         return response
+
 

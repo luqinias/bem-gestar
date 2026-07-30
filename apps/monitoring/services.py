@@ -264,13 +264,7 @@ def _create_clinical_notification(patient, clinical_alert, notif_severity):
     """
     from apps.monitoring.models import Notification
 
-    severity_label = {
-        'low': 'ℹ️',
-        'medium': '⚠️',
-        'high': '🚨',
-    }.get(clinical_alert.severity, '⚠️')
-
-    title = f'{severity_label} {clinical_alert.condition_name}'
+    title = clinical_alert.condition_name
     message = clinical_alert.reason
 
     Notification.objects.create(
@@ -291,7 +285,7 @@ def _create_clinical_notification(patient, clinical_alert, notif_severity):
             patient=patient,
             notification_type=Notification.NotificationType.CLINICAL_ALERT,
             severity=notif_severity,
-            title=f'{severity_label} {clinical_alert.condition_name} — {name}',
+            title=f'{clinical_alert.condition_name} — {name}',
             message=f'{name}: {clinical_alert.reason}',
             clinical_alert=clinical_alert,
         )
@@ -353,10 +347,10 @@ def create_chat_notification(sender, recipient, message_text):
     patient = sender if sender.is_patient else (recipient if recipient.is_patient else sender)
 
     if sender.is_doctor:
-        title = f'💬 Nova Mensagem de Dr(a). {sender.name.split()[0]}'
+        title = f'Nova Mensagem de Dr(a). {sender.name.split()[0]}'
         msg = f'Dr(a). {sender.name}: {message_text[:80]}'
     else:
-        title = f'💬 Nova Mensagem de {sender.name.split()[0]}'
+        title = f'Nova Mensagem de {sender.name.split()[0]}'
         msg = f'{sender.name}: {message_text[:80]}'
 
     return Notification.objects.create(
@@ -367,6 +361,7 @@ def create_chat_notification(sender, recipient, message_text):
         title=title,
         message=msg,
     )
+
 
 
 def reevaluate_patient_health_status(patient, deleted_vs_id=None, deleted_symptom_id=None):

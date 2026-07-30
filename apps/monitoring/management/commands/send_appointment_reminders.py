@@ -31,11 +31,12 @@ class Command(BaseCommand):
                 doctor=consultation.doctor,
                 notification_type='appointment_reminder',
                 severity='info',
-                patient_title='⏰ Lembrete de Consulta',
+                patient_title='Lembrete de Consulta',
                 patient_message=f'Você possui uma consulta agendada amanhã às {time_str} com Dr(a). {consultation.doctor.name}.',
-                doctor_title=f'⏰ Lembrete de Atendimento — {consultation.patient.name}',
+                doctor_title=f'Lembrete de Atendimento — {consultation.patient.name}',
                 doctor_message=f'Você possui atendimento agendado amanhã às {time_str} com a paciente {consultation.patient.name}.'
             )
+
             created_count += len(notifs)
 
         self.stdout.write(
