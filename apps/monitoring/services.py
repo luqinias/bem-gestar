@@ -3,6 +3,8 @@ Risk score calculation service for BemGestar.
 Uses a rule-based scoring system based on clinical thresholds.
 """
 from decimal import Decimal
+from apps.monitoring import clinical_rules as cr
+
 
 
 # Clinical thresholds for alert generation
@@ -350,3 +352,97 @@ def check_and_create_alerts(vital_sign=None, symptom=None, patient=None, risk_sc
         )
 
     return notifications_created
+
+
+def run_clinical_rules(vital_sign=None, symptom=None, patient=None):
+    """
+    Executa o motor de regras clínicas e persiste os alertas gerados.
+
+    Para cada alerta identificado:
+      1. Cria um ClinicalAlert (entidade principal).
+      2. Cria uma Notification referenciando o ClinicalAlert (sem duplicar dados).
+
+    Retorna a lista de ClinicalAlert criados.
+    """
+    from apps.monitoring.models import ClinicalAlert, Notification
+
+    if patient is None:
+        return []
+
+    alerts_data = cr.evaluate_rules(
+        patient=patient,
+        vital_sign=vital_sign,
+        symptom=symptom,
+    )
+
+    # Map severity to Notification.Severity
+    severity_map = {
+        ClinicalAlert.Severity.LOW: Notification.Severity.INFO,
+        ClinicalAlert.Severity.MEDIUM: Notification.Severity.WARNING,
+        ClinicalAlert.Severity.HIGH: Notification.Severity.URGENT,
+    }
+
+    created_alerts = []
+    for data in alerts_data:
+        related_vs = data.pop('related_vital_sign_obj', None)
+
+        alert = ClinicalAlert.objects.create(
+            patient=patient,
+            condition_name=data['condition_name'],
+            severity=data['severity'],
+            reason=data['reason'],
+            guidance=data['guidance'],
+            symptoms_used=data['symptoms_used'],
+            vital_signs_used=data['vital_signs_used'],
+            related_vital_sign=related_vs,
+            related_symptom=symptom,
+            status=ClinicalAlert.Status.ACTIVE,
+            viewed=False,
+        )
+        created_alerts.append(alert)
+
+        # Gera Notification para o paciente (referenciando o alerta)
+        notif_severity = severity_map.get(data['severity'], Notification.Severity.WARNING)
+        _create_clinical_notification(patient, alert, notif_severity)
+
+    return created_alerts
+
+
+def _create_clinical_notification(patient, clinical_alert, notif_severity):
+    """
+    Cria uma notificação para a paciente e, se vinculada, para o médico.
+    A notificação referencia o ClinicalAlert e não duplica o conteúdo.
+    """
+    from apps.monitoring.models import Notification
+
+    severity_label = {
+        'low': 'ℹ️',
+        'medium': '⚠️',
+        'high': '🚨',
+    }.get(clinical_alert.severity, '⚠️')
+
+    title = f'{severity_label} {clinical_alert.condition_name}'
+    message = clinical_alert.reason
+
+    Notification.objects.create(
+        recipient=patient,
+        patient=patient,
+        notification_type=Notification.NotificationType.GENERAL,
+        severity=notif_severity,
+        title=title,
+        message=message,
+        clinical_alert=clinical_alert,
+    )
+
+    doctor_user = _linked_doctor_user(patient)
+    if doctor_user:
+        name = patient.name
+        Notification.objects.create(
+            recipient=doctor_user,
+            patient=patient,
+            notification_type=Notification.NotificationType.GENERAL,
+            severity=notif_severity,
+            title=f'{severity_label} {clinical_alert.condition_name} — {name}',
+            message=f'{name}: {clinical_alert.reason}',
+            clinical_alert=clinical_alert,
+        )

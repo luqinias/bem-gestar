@@ -6,6 +6,84 @@ from django.db import models
 from django.utils import timezone
 
 
+class ClinicalAlert(models.Model):
+    """
+    Alerta clínico gestacional gerado automaticamente pelo motor de regras.
+    É a entidade principal do sistema de alertas.
+    As Notification apenas referenciam este modelo para evitar duplicação.
+    """
+
+    class Severity(models.TextChoices):
+        LOW = 'low', 'Informativo'
+        MEDIUM = 'medium', 'Atenção'
+        HIGH = 'high', 'Urgente'
+
+    class Status(models.TextChoices):
+        ACTIVE = 'active', 'Ativo'
+        RESOLVED = 'resolved', 'Resolvido'
+
+    patient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='clinical_alerts',
+        limit_choices_to={'user_type': 'patient'},
+        verbose_name='Paciente',
+    )
+
+    # Identificação da condição clínica
+    condition_name = models.CharField(
+        max_length=120, verbose_name='Condição identificada'
+    )
+    severity = models.CharField(
+        max_length=10, choices=Severity.choices,
+        default=Severity.MEDIUM, verbose_name='Severidade'
+    )
+
+    # Conteúdo exibido para a usuária
+    reason = models.TextField(verbose_name='Motivo do alerta')
+    guidance = models.TextField(verbose_name='Orientações')
+
+    # Dados clínicos utilizados na regra
+    symptoms_used = models.JSONField(
+        default=list, verbose_name='Sintomas utilizados'
+    )
+    vital_signs_used = models.JSONField(
+        default=dict, verbose_name='Sinais vitais utilizados'
+    )
+
+    # Registros relacionados (opcionais)
+    related_vital_sign = models.ForeignKey(
+        'VitalSign', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='clinical_alerts',
+        verbose_name='Sinal vital relacionado',
+    )
+    related_symptom = models.ForeignKey(
+        'Symptom', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='clinical_alerts',
+        verbose_name='Sintoma relacionado',
+    )
+
+    # Estado do alerta
+    status = models.CharField(
+        max_length=10, choices=Status.choices,
+        default=Status.ACTIVE, verbose_name='Status'
+    )
+    viewed = models.BooleanField(default=False, verbose_name='Visualizado')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
+
+    class Meta:
+        verbose_name = 'Alerta Clínico'
+        verbose_name_plural = 'Alertas Clínicos'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'[{self.get_severity_display()}] {self.condition_name} — {self.patient.name}'
+
+
 class VitalSign(models.Model):
     """
     Registro de sinais vitais pela paciente.
@@ -229,6 +307,14 @@ class Notification(models.Model):
     )
 
     read = models.BooleanField(default=False, verbose_name='Lida')
+
+    # Referência ao alerta clínico (quando gerado pelo motor de regras)
+    clinical_alert = models.ForeignKey(
+        ClinicalAlert, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='notifications',
+        verbose_name='Alerta clínico relacionado',
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 

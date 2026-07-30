@@ -13,6 +13,10 @@ from .views import (
     MarkNotificationReadView,
     ClinicalDashboardView,
     PatientTimelineView,
+    ClinicalAlertListView,
+    ClinicalAlertDetailView,
+    MarkAlertViewedView,
+    DoctorRecentAlertsView,
 )
 
 urlpatterns = [
@@ -31,6 +35,12 @@ urlpatterns = [
     # Notifications
     path('notifications/', NotificationListView.as_view(), name='notifications-list'),
     path('notifications/<int:pk>/read/', MarkNotificationReadView.as_view(), name='notification-read'),
+
+    # Clinical Alerts
+    path('alerts/', ClinicalAlertListView.as_view(), name='clinical-alerts-list'),
+    path('alerts/recent/', DoctorRecentAlertsView.as_view(), name='clinical-alerts-recent'),
+    path('alerts/<int:pk>/', ClinicalAlertDetailView.as_view(), name='clinical-alert-detail'),
+    path('alerts/<int:pk>/viewed/', MarkAlertViewedView.as_view(), name='clinical-alert-viewed'),
 
     # Dashboard (Doctor)
     path('dashboard/', ClinicalDashboardView.as_view(), name='clinical-dashboard'),

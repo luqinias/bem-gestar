@@ -2,7 +2,32 @@
 Serializers for monitoring app.
 """
 from rest_framework import serializers
-from .models import VitalSign, Symptom, RiskScore, Notification
+from .models import VitalSign, Symptom, RiskScore, Notification, ClinicalAlert
+
+
+class ClinicalAlertSerializer(serializers.ModelSerializer):
+    patient_name = serializers.CharField(source='patient.name', read_only=True)
+    severity_display = serializers.CharField(source='get_severity_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = ClinicalAlert
+        fields = [
+            'id', 'patient', 'patient_name',
+            'condition_name', 'severity', 'severity_display',
+            'reason', 'guidance',
+            'symptoms_used', 'vital_signs_used',
+            'related_vital_sign', 'related_symptom',
+            'status', 'status_display',
+            'viewed',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'patient', 'condition_name', 'severity',
+            'reason', 'guidance', 'symptoms_used', 'vital_signs_used',
+            'related_vital_sign', 'related_symptom', 'created_at', 'updated_at',
+        ]
+
 
 
 class VitalSignSerializer(serializers.ModelSerializer):
@@ -85,6 +110,9 @@ class NotificationSerializer(serializers.ModelSerializer):
     patient_name = serializers.CharField(source='patient.name', read_only=True)
     notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
     severity_display = serializers.CharField(source='get_severity_display', read_only=True)
+    clinical_alert_id = serializers.PrimaryKeyRelatedField(
+        source='clinical_alert', read_only=True
+    )
 
     class Meta:
         model = Notification
@@ -94,12 +122,13 @@ class NotificationSerializer(serializers.ModelSerializer):
             'severity', 'severity_display',
             'title', 'message',
             'vital_sign', 'symptom', 'risk_score',
+            'clinical_alert_id',
             'read',
             'created_at',
         ]
         read_only_fields = [
             'id', 'patient', 'notification_type', 'severity', 'title', 'message',
-            'vital_sign', 'symptom', 'risk_score', 'created_at'
+            'vital_sign', 'symptom', 'risk_score', 'clinical_alert_id', 'created_at'
         ]
 
 

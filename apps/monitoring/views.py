@@ -12,12 +12,13 @@ from rest_framework.views import APIView
 _TAG = ['monitoring']
 
 from apps.accounts.permissions import IsPatient, IsValidatedDoctor, IsOwnerOrDoctor
-from .models import VitalSign, Symptom, RiskScore, Notification
+from .models import VitalSign, Symptom, RiskScore, Notification, ClinicalAlert
 from .serializers import (
     VitalSignSerializer, SymptomSerializer,
     RiskScoreSerializer, NotificationSerializer, DashboardSerializer,
+    ClinicalAlertSerializer,
 )
-from .services import calculate_risk_score, check_and_create_alerts
+from .services import calculate_risk_score, check_and_create_alerts, run_clinical_rules
 
 
 # ─────────────────────────────────────────────
@@ -66,12 +67,19 @@ class VitalSignListCreateView(generics.ListCreateAPIView):
             risk_level=result['risk_level'],
             contributing_factors=result['contributing_factors'],
         )
-        # Generate alerts if needed
+        # Generate threshold-based alerts
         check_and_create_alerts(
             vital_sign=vital_sign,
             patient=self.request.user,
             risk_score_obj=risk_score_obj,
         )
+        # Run clinical rules engine
+        run_clinical_rules(
+            vital_sign=vital_sign,
+            patient=self.request.user,
+        )
+        # Store new clinical alert IDs in request for response header
+        self.request._new_vital_sign = vital_sign
 
 
 @extend_schema(tags=_TAG, summary='Detalhe de Sinal Vital')
@@ -148,6 +156,11 @@ class SymptomListCreateView(generics.ListCreateAPIView):
             symptom=symptom,
             patient=self.request.user,
             risk_score_obj=risk_score_obj,
+        )
+        # Run clinical rules engine
+        run_clinical_rules(
+            symptom=symptom,
+            patient=self.request.user,
         )
 
 
@@ -370,4 +383,153 @@ class PatientTimelineView(APIView):
             'vital_signs': VitalSignSerializer(vital_signs, many=True).data,
             'symptoms': SymptomSerializer(symptoms, many=True).data,
             'risk_scores': RiskScoreSerializer(risk_scores, many=True).data,
+        })
+
+
+# ─────────────────────────────────────────────
+# Clinical Alerts
+# ─────────────────────────────────────────────
+
+@extend_schema(
+    tags=_TAG,
+    summary='Listar Alertas Clínicos',
+    description=(
+        'Paciente: lista os próprios alertas clínicos. '
+        'Médico: lista alertas de todas as pacientes vinculadas. '
+        'Filtros disponíveis: severity (low/medium/high), status (active/resolved).'
+    ),
+)
+class ClinicalAlertListView(generics.ListAPIView):
+    """
+    GET /api/monitoring/alerts/
+    """
+    serializer_class = ClinicalAlertSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return ClinicalAlert.objects.none()
+
+        user = self.request.user
+        qs = ClinicalAlert.objects.none()
+
+        if user.is_patient:
+            qs = ClinicalAlert.objects.filter(patient=user)
+        elif user.is_doctor:
+            try:
+                doctor = user.doctor_profile
+                patient_ids = doctor.patients.values_list('user_id', flat=True)
+                qs = ClinicalAlert.objects.filter(patient_id__in=patient_ids)
+            except Exception:
+                pass
+
+        # Optional filters
+        severity = self.request.query_params.get('severity')
+        if severity:
+            qs = qs.filter(severity=severity)
+
+        alert_status = self.request.query_params.get('status')
+        if alert_status:
+            qs = qs.filter(status=alert_status)
+
+        patient_id = self.request.query_params.get('patient_id')
+        if patient_id and user.is_doctor:
+            qs = qs.filter(patient_id=patient_id)
+
+        return qs.order_by('-created_at')
+
+
+@extend_schema(tags=_TAG, summary='Detalhe de Alerta Clínico')
+class ClinicalAlertDetailView(generics.RetrieveAPIView):
+    """
+    GET /api/monitoring/alerts/<id>/
+    """
+    serializer_class = ClinicalAlertSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return ClinicalAlert.objects.none()
+        user = self.request.user
+        if user.is_patient:
+            return ClinicalAlert.objects.filter(patient=user)
+        elif user.is_doctor:
+            try:
+                doctor = user.doctor_profile
+                patient_ids = doctor.patients.values_list('user_id', flat=True)
+                return ClinicalAlert.objects.filter(patient_id__in=patient_ids)
+            except Exception:
+                return ClinicalAlert.objects.none()
+        return ClinicalAlert.objects.none()
+
+
+@extend_schema(tags=_TAG, summary='Marcar Alerta Clínico como Visualizado')
+class MarkAlertViewedView(APIView):
+    """
+    POST /api/monitoring/alerts/<id>/viewed/
+    Marks a ClinicalAlert as viewed and also marks all its linked Notifications as read.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            if request.user.is_patient:
+                alert = ClinicalAlert.objects.get(pk=pk, patient=request.user)
+            elif request.user.is_doctor:
+                doctor = request.user.doctor_profile
+                patient_ids = doctor.patients.values_list('user_id', flat=True)
+                alert = ClinicalAlert.objects.get(pk=pk, patient_id__in=patient_ids)
+            else:
+                return Response(status=status.HTTP_403_FORBIDDEN)
+        except ClinicalAlert.DoesNotExist:
+            return Response({'error': 'Alerta não encontrado.'}, status=404)
+
+        alert.viewed = True
+        alert.save(update_fields=['viewed'])
+
+        # Also mark all related notifications as read for this user
+        Notification.objects.filter(
+            clinical_alert=alert, recipient=request.user
+        ).update(read=True)
+
+        return Response({'message': 'Alerta marcado como visualizado.'})
+
+
+@extend_schema(
+    tags=_TAG,
+    summary='[Médico] Alertas Recentes das Pacientes',
+    description='Últimos 20 alertas clínicos de todas as pacientes vinculadas, ordenados por data.',
+)
+class DoctorRecentAlertsView(APIView):
+    """
+    GET /api/monitoring/alerts/recent/
+    Doctor-only: recent clinical alerts across all linked patients.
+    """
+    def get_permissions(self):
+        return [IsValidatedDoctor()]
+
+    def get(self, request):
+        doctor = request.user.doctor_profile
+        patient_ids = doctor.patients.values_list('user_id', flat=True)
+
+        alerts = ClinicalAlert.objects.filter(
+            patient_id__in=patient_ids
+        ).order_by('-created_at')[:20]
+
+        # Summary counts
+        urgent_count = ClinicalAlert.objects.filter(
+            patient_id__in=patient_ids, severity='high', status='active'
+        ).count()
+        warning_count = ClinicalAlert.objects.filter(
+            patient_id__in=patient_ids, severity='medium', status='active'
+        ).count()
+        info_count = ClinicalAlert.objects.filter(
+            patient_id__in=patient_ids, severity='low', status='active'
+        ).count()
+
+        return Response({
+            'urgent_count': urgent_count,
+            'warning_count': warning_count,
+            'info_count': info_count,
+            'alerts': ClinicalAlertSerializer(alerts, many=True).data,
         })
