@@ -132,12 +132,22 @@ class MessageListCreateView(generics.ListCreateAPIView):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Você não tem acesso a esta conversa.')
 
-        serializer.save(
+        msg = serializer.save(
             conversation=conversation,
             sender=self.request.user,
         )
         # Update conversation timestamp
         conversation.save()
+
+        # Disparar notificação para o destinatário da mensagem
+        from apps.monitoring.services import create_chat_notification
+        recipient = conversation.doctor if self.request.user == conversation.patient else conversation.patient
+        create_chat_notification(
+            sender=self.request.user,
+            recipient=recipient,
+            message_text=msg.content
+        )
+
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

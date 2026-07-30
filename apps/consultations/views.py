@@ -18,6 +18,9 @@ from .serializers import (
 _TAG = ['consultations']
 
 
+from apps.monitoring.services import create_consultation_notification, create_exam_notification
+
+
 # ─────────────────────────────────────────────
 # Consultations
 # ─────────────────────────────────────────────
@@ -72,7 +75,17 @@ class ConsultationListCreateView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(doctor=self.request.user)
+        consultation = serializer.save(doctor=self.request.user)
+        # Disparar notificação para a paciente
+        dt_str = consultation.scheduled_date.strftime("%d/%m/%Y às %H:%M")
+        create_consultation_notification(
+            patient=consultation.patient,
+            doctor=consultation.doctor,
+            notification_type='appointment_scheduled',
+            severity='info',
+            patient_title='📅 Consulta Agendada',
+            patient_message=f'Consulta agendada para {dt_str} com Dr(a). {consultation.doctor.name}.'
+        )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data, context={'request': request})
@@ -114,6 +127,20 @@ class ConsultationDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Consultation.objects.filter(doctor=user)
         return Consultation.objects.none()
 
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        consultation = self.get_object()
+        dt_str = consultation.scheduled_date.strftime("%d/%m/%Y às %H:%M")
+        create_consultation_notification(
+            patient=consultation.patient,
+            doctor=consultation.doctor,
+            notification_type='appointment_updated',
+            severity='info',
+            patient_title='✏️ Consulta Alterada',
+            patient_message=f'Sua consulta com Dr(a). {consultation.doctor.name} foi alterada para {dt_str}.'
+        )
+        return response
+
 
 @extend_schema(tags=_TAG, summary='Cancelar Consulta', description='Paciente ou Médico pode cancelar uma consulta. Informe o motivo opcionalmente.')
 class CancelConsultationView(APIView):
@@ -149,6 +176,26 @@ class CancelConsultationView(APIView):
         serializer = CancelConsultationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         consultation.cancel(cancelled_by=user, reason=serializer.validated_data.get('reason', ''))
+
+        dt_str = consultation.scheduled_date.strftime("%d/%m/%Y às %H:%M")
+        if user.is_patient:
+            create_consultation_notification(
+                patient=consultation.patient,
+                doctor=consultation.doctor,
+                notification_type='appointment_cancelled',
+                severity='warning',
+                doctor_title=f'❌ Consulta Cancelada — {consultation.patient.name}',
+                doctor_message=f'A paciente {consultation.patient.name} cancelou a consulta de {dt_str}.'
+            )
+        else:
+            create_consultation_notification(
+                patient=consultation.patient,
+                doctor=consultation.doctor,
+                notification_type='appointment_cancelled',
+                severity='warning',
+                patient_title='❌ Consulta Cancelada',
+                patient_message=f'Sua consulta agendada para {dt_str} foi cancelada pelo médico.'
+            )
 
         return Response(ConsultationSerializer(consultation).data)
 
@@ -269,7 +316,15 @@ class ExamRequestListCreateView(generics.ListCreateAPIView):
         return ExamRequest.objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(doctor=self.request.user)
+        exam_req = serializer.save(doctor=self.request.user)
+        create_exam_notification(
+            patient=exam_req.patient,
+            doctor=exam_req.doctor,
+            notification_type='exam_requested',
+            severity='info',
+            title='🧪 Novo Exame Solicitado',
+            message=f'O Dr(a). {exam_req.doctor.name} solicitou o exame: {exam_req.exam_name}.'
+        )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data, context={'request': request})
@@ -313,5 +368,16 @@ class ExamRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
         return ExamRequest.objects.none()
 
     def update(self, request, *args, **kwargs):
-        super().update(request, *args, **kwargs)
-        return Response(ExamRequestSerializer(self.get_object()).data)
+        response = super().update(request, *args, **kwargs)
+        exam_req = self.get_object()
+        if exam_req.result_notes or exam_req.status == ExamRequest.Status.COMPLETED:
+            create_exam_notification(
+                patient=exam_req.patient,
+                doctor=exam_req.doctor,
+                notification_type='exam_result',
+                severity='info',
+                title='📋 Resultado de Exame Disponível',
+                message=f'O resultado do seu exame "{exam_req.exam_name}" foi disponibilizado.'
+            )
+        return response
+

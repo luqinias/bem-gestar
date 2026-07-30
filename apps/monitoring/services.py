@@ -6,7 +6,6 @@ from decimal import Decimal
 from apps.monitoring import clinical_rules as cr
 
 
-
 # Clinical thresholds for alert generation
 THRESHOLDS = {
     # Blood pressure (systolic/diastolic)
@@ -204,165 +203,17 @@ def _linked_doctor_user(patient):
         return None
 
 
-def _create_notification_pair(
-    patient, notification_type, severity,
-    patient_title, patient_message, doctor_title, doctor_message,
-    **related
-):
-    """
-    Creates one Notification row for the patient (patient-voiced copy) and,
-    if she has a linked doctor, a second row for that doctor (doctor-voiced
-    copy) — each is its own DB record scoped to its recipient, instead of a
-    single row shared/read by both.
-    """
-    from apps.monitoring.models import Notification
-
-    created = [Notification.objects.create(
-        recipient=patient,
-        patient=patient,
-        notification_type=notification_type,
-        severity=severity,
-        title=patient_title,
-        message=patient_message,
-        **related,
-    )]
-
-    doctor_user = _linked_doctor_user(patient)
-    if doctor_user:
-        created.append(Notification.objects.create(
-            recipient=doctor_user,
-            patient=patient,
-            notification_type=notification_type,
-            severity=severity,
-            title=doctor_title,
-            message=doctor_message,
-            **related,
-        ))
-
-    return created
-
-
 def check_and_create_alerts(vital_sign=None, symptom=None, patient=None, risk_score_obj=None):
     """
-    Analyze new data and create notifications when clinical thresholds are
-    exceeded — one row per recipient (patient and, if linked, her doctor).
+    Desativado: Notificações de limiares vitais isolados foram removidas.
+    Apenas alertas clínicos derivados do motor de regras (run_clinical_rules) geram notificações.
     """
-    from apps.monitoring.models import Notification
-    notifications_created = []
-    t = THRESHOLDS
-
-    if vital_sign:
-        sys_bp = vital_sign.systolic_bp
-        dia_bp = vital_sign.diastolic_bp
-        name = vital_sign.patient.name
-
-        # Severe hypertension alert
-        if sys_bp and sys_bp >= t['systolic_bp_very_high']:
-            notifications_created += _create_notification_pair(
-                vital_sign.patient, Notification.NotificationType.HYPERTENSION, Notification.Severity.URGENT,
-                'Hipertensão Grave Detectada',
-                f'Pressão arterial sistólica de {sys_bp} mmHg detectada. Procure atendimento médico imediatamente.',
-                f'Hipertensão Grave — {name}',
-                f'{name} registrou pressão arterial sistólica de {sys_bp} mmHg (hipertensão grave).',
-                vital_sign=vital_sign,
-            )
-
-        elif sys_bp and sys_bp >= t['systolic_bp_high']:
-            notifications_created += _create_notification_pair(
-                vital_sign.patient, Notification.NotificationType.HYPERTENSION, Notification.Severity.WARNING,
-                'Pressão Arterial Elevada',
-                f'Pressão arterial sistólica de {sys_bp} mmHg. Monitore e informe seu médico.',
-                f'Pressão Arterial Elevada — {name}',
-                f'{name} registrou pressão arterial sistólica de {sys_bp} mmHg.',
-                vital_sign=vital_sign,
-            )
-
-        # Hypotension alert
-        if sys_bp and sys_bp <= t['systolic_bp_low']:
-            notifications_created += _create_notification_pair(
-                vital_sign.patient, Notification.NotificationType.HYPOTENSION, Notification.Severity.WARNING,
-                'Pressão Arterial Baixa',
-                f'Pressão arterial sistólica de {sys_bp} mmHg. Hidrate-se e descanse.',
-                f'Pressão Arterial Baixa — {name}',
-                f'{name} registrou pressão arterial sistólica de {sys_bp} mmHg (hipotensão).',
-                vital_sign=vital_sign,
-            )
-
-        # Low oxygen saturation
-        if vital_sign.oxygen_saturation and vital_sign.oxygen_saturation <= t['oxygen_very_low']:
-            notifications_created += _create_notification_pair(
-                vital_sign.patient, Notification.NotificationType.LOW_OXYGEN, Notification.Severity.URGENT,
-                'Saturação de Oxigênio Crítica',
-                f'Saturação de {vital_sign.oxygen_saturation}%. Procure atendimento médico urgente.',
-                f'Saturação de Oxigênio Crítica — {name}',
-                f'{name} registrou saturação de oxigênio de {vital_sign.oxygen_saturation}%.',
-                vital_sign=vital_sign,
-            )
-
-        # Fever
-        if vital_sign.temperature_celsius:
-            temp = float(vital_sign.temperature_celsius)
-            if temp >= t['temperature_high']:
-                severity = Notification.Severity.URGENT if temp >= t['temperature_very_high'] else Notification.Severity.WARNING
-                notifications_created += _create_notification_pair(
-                    vital_sign.patient, Notification.NotificationType.FEVER, severity,
-                    'Febre Detectada',
-                    f'Temperatura de {temp}°C. Informe seu médico.',
-                    f'Febre Detectada — {name}',
-                    f'{name} registrou temperatura de {temp}°C.',
-                    vital_sign=vital_sign,
-                )
-
-    if symptom:
-        # Severe symptoms always trigger alerts
-        if symptom.severity == 'severe' or symptom.symptom_type in HIGH_RISK_SYMPTOMS:
-            name = symptom.patient.name
-            notifications_created += _create_notification_pair(
-                symptom.patient, Notification.NotificationType.SEVERE_SYMPTOM,
-                Notification.Severity.URGENT if symptom.severity == 'severe' else Notification.Severity.WARNING,
-                f'Sintoma Importante: {symptom.get_symptom_type_display()}',
-                (
-                    f'Você registrou {symptom.get_symptom_type_display()} '
-                    f'com intensidade {symptom.get_severity_display()}. Informe seu médico.'
-                ),
-                f'Sintoma Importante: {symptom.get_symptom_type_display()} — {name}',
-                (
-                    f'{name} registrou {symptom.get_symptom_type_display()} '
-                    f'com intensidade {symptom.get_severity_display()}.'
-                ),
-                symptom=symptom,
-            )
-
-    if risk_score_obj and risk_score_obj.risk_level in ['high', 'critical']:
-        severity = Notification.Severity.URGENT if risk_score_obj.risk_level == 'critical' else Notification.Severity.WARNING
-        name = risk_score_obj.patient.name
-        notifications_created += _create_notification_pair(
-            risk_score_obj.patient, Notification.NotificationType.HIGH_RISK_SCORE, severity,
-            f'Score de Risco {risk_score_obj.get_risk_level_display()}',
-            (
-                f'Seu score de risco gestacional está em {risk_score_obj.score} '
-                f'({risk_score_obj.get_risk_level_display()}). Entre em contato com seu médico.'
-            ),
-            f'Score de Risco {risk_score_obj.get_risk_level_display()} — {name}',
-            (
-                f'O score de risco gestacional de {name} está em {risk_score_obj.score} '
-                f'({risk_score_obj.get_risk_level_display()}).'
-            ),
-            risk_score=risk_score_obj,
-        )
-
-    return notifications_created
+    return []
 
 
 def run_clinical_rules(vital_sign=None, symptom=None, patient=None):
     """
     Executa o motor de regras clínicas e persiste os alertas gerados.
-
-    Para cada alerta identificado:
-      1. Cria um ClinicalAlert (entidade principal).
-      2. Cria uma Notification referenciando o ClinicalAlert (sem duplicar dados).
-
-    Retorna a lista de ClinicalAlert criados.
     """
     from apps.monitoring.models import ClinicalAlert, Notification
 
@@ -375,7 +226,6 @@ def run_clinical_rules(vital_sign=None, symptom=None, patient=None):
         symptom=symptom,
     )
 
-    # Map severity to Notification.Severity
     severity_map = {
         ClinicalAlert.Severity.LOW: Notification.Severity.INFO,
         ClinicalAlert.Severity.MEDIUM: Notification.Severity.WARNING,
@@ -401,7 +251,6 @@ def run_clinical_rules(vital_sign=None, symptom=None, patient=None):
         )
         created_alerts.append(alert)
 
-        # Gera Notification para o paciente (referenciando o alerta)
         notif_severity = severity_map.get(data['severity'], Notification.Severity.WARNING)
         _create_clinical_notification(patient, alert, notif_severity)
 
@@ -411,7 +260,7 @@ def run_clinical_rules(vital_sign=None, symptom=None, patient=None):
 def _create_clinical_notification(patient, clinical_alert, notif_severity):
     """
     Cria uma notificação para a paciente e, se vinculada, para o médico.
-    A notificação referencia o ClinicalAlert e não duplica o conteúdo.
+    A notificação referencia o ClinicalAlert e usa o tipo CLINICAL_ALERT.
     """
     from apps.monitoring.models import Notification
 
@@ -427,7 +276,7 @@ def _create_clinical_notification(patient, clinical_alert, notif_severity):
     Notification.objects.create(
         recipient=patient,
         patient=patient,
-        notification_type=Notification.NotificationType.GENERAL,
+        notification_type=Notification.NotificationType.CLINICAL_ALERT,
         severity=notif_severity,
         title=title,
         message=message,
@@ -436,17 +285,88 @@ def _create_clinical_notification(patient, clinical_alert, notif_severity):
 
     doctor_user = _linked_doctor_user(patient)
     if doctor_user:
-
         name = patient.name
         Notification.objects.create(
             recipient=doctor_user,
             patient=patient,
-            notification_type=Notification.NotificationType.GENERAL,
+            notification_type=Notification.NotificationType.CLINICAL_ALERT,
             severity=notif_severity,
             title=f'{severity_label} {clinical_alert.condition_name} — {name}',
             message=f'{name}: {clinical_alert.reason}',
             clinical_alert=clinical_alert,
         )
+
+
+def create_consultation_notification(
+    patient, doctor, notification_type, severity, patient_title=None, patient_message=None, doctor_title=None, doctor_message=None
+):
+    """
+    Cria notificação para paciente e/ou médico referente a consultas.
+    """
+    from apps.monitoring.models import Notification
+
+    created = []
+    if patient_title and patient_message and patient:
+        created.append(Notification.objects.create(
+            recipient=patient,
+            patient=patient,
+            notification_type=notification_type,
+            severity=severity,
+            title=patient_title,
+            message=patient_message,
+        ))
+
+    if doctor_title and doctor_message and doctor:
+        created.append(Notification.objects.create(
+            recipient=doctor,
+            patient=patient,
+            notification_type=notification_type,
+            severity=severity,
+            title=doctor_title,
+            message=doctor_message,
+        ))
+    return created
+
+
+def create_exam_notification(patient, doctor, notification_type, severity, title, message):
+    """
+    Cria notificação referente a solicitação ou resultado de exames.
+    """
+    from apps.monitoring.models import Notification
+
+    return Notification.objects.create(
+        recipient=patient,
+        patient=patient,
+        notification_type=notification_type,
+        severity=severity,
+        title=title,
+        message=message,
+    )
+
+
+def create_chat_notification(sender, recipient, message_text):
+    """
+    Cria notificação de nova mensagem do chat para o destinatário.
+    """
+    from apps.monitoring.models import Notification
+
+    patient = sender if sender.is_patient else (recipient if recipient.is_patient else sender)
+
+    if sender.is_doctor:
+        title = f'💬 Nova Mensagem de Dr(a). {sender.name.split()[0]}'
+        msg = f'Dr(a). {sender.name}: {message_text[:80]}'
+    else:
+        title = f'💬 Nova Mensagem de {sender.name.split()[0]}'
+        msg = f'{sender.name}: {message_text[:80]}'
+
+    return Notification.objects.create(
+        recipient=recipient,
+        patient=patient,
+        notification_type=Notification.NotificationType.CHAT_MESSAGE,
+        severity=Notification.Severity.INFO,
+        title=title,
+        message=msg,
+    )
 
 
 def reevaluate_patient_health_status(patient, deleted_vs_id=None, deleted_symptom_id=None):
@@ -457,7 +377,6 @@ def reevaluate_patient_health_status(patient, deleted_vs_id=None, deleted_sympto
 
     latest_vs = VitalSign.objects.filter(patient=patient).order_by('-recorded_at').first()
     latest_sym = Symptom.objects.filter(patient=patient).order_by('-recorded_at').first()
-
 
     if latest_vs or latest_sym:
         result = calculate_risk_score(vital_sign=latest_vs, symptom=latest_sym, patient=patient)
@@ -475,7 +394,6 @@ def reevaluate_patient_health_status(patient, deleted_vs_id=None, deleted_sympto
             contributing_factors={},
         )
 
-    # Resolve active alerts associated with the deleted vital sign or symptom
     active_alerts = ClinicalAlert.objects.filter(patient=patient, status=ClinicalAlert.Status.ACTIVE)
     for alert in active_alerts:
         if alert.related_vital_sign_id is None and alert.related_symptom_id is None:

@@ -252,6 +252,14 @@ class Notification(models.Model):
     its own copy and its own read status — no row is shared between users.
     """
     class NotificationType(models.TextChoices):
+        CLINICAL_ALERT = 'clinical_alert', 'Alerta Clínico'
+        APPOINTMENT_SCHEDULED = 'appointment_scheduled', 'Consulta Agendada'
+        APPOINTMENT_UPDATED = 'appointment_updated', 'Consulta Alterada'
+        APPOINTMENT_CANCELLED = 'appointment_cancelled', 'Consulta Cancelada'
+        APPOINTMENT_REMINDER = 'appointment_reminder', 'Lembrete de Consulta'
+        EXAM_REQUESTED = 'exam_requested', 'Solicitação de Exame'
+        EXAM_RESULT = 'exam_result', 'Resultado de Exame'
+        CHAT_MESSAGE = 'chat_message', 'Mensagem do Chat'
         HYPERTENSION = 'hypertension', 'Hipertensão'
         HYPOTENSION = 'hypotension', 'Hipotensão'
         TACHYCARDIA = 'tachycardia', 'Taquicardia'
@@ -283,8 +291,9 @@ class Notification(models.Model):
     )
 
     notification_type = models.CharField(
-        max_length=30, choices=NotificationType.choices, verbose_name='Tipo'
+        max_length=50, choices=NotificationType.choices, verbose_name='Tipo'
     )
+
     severity = models.CharField(
         max_length=10, choices=Severity.choices,
         default=Severity.WARNING, verbose_name='Severidade'
