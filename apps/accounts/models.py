@@ -126,16 +126,41 @@ class PatientProfile(models.Model):
     def __str__(self):
         return f'Paciente: {self.user.name}'
 
+    def calculate_expected_delivery_date(self):
+        """
+        Calculates expected delivery date:
+        1. Naegele rule: LMP + 280 days (40 weeks)
+        2. Fallback: Current Date + (40 - gestational_age_weeks) weeks
+        """
+        from datetime import date, timedelta
+        if self.last_menstrual_period:
+            return self.last_menstrual_period + timedelta(days=280)
+        elif self.gestational_age_weeks is not None:
+            remaining_weeks = max(0, 40 - self.gestational_age_weeks)
+            return date.today() + timedelta(weeks=remaining_weeks)
+        return None
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate expected delivery date if not explicitly set or if data changed
+        computed_edd = self.calculate_expected_delivery_date()
+        if computed_edd:
+            self.expected_delivery_date = computed_edd
+        super().save(*args, **kwargs)
+
     def update_gestational_age(self):
-        """Recalculate gestational age based on LMP."""
+        """Recalculate gestational age based on LMP and re-evaluate EDD."""
         if self.last_menstrual_period:
             from datetime import date
             delta = date.today() - self.last_menstrual_period
             self.gestational_age_weeks = delta.days // 7
-            self.save(update_fields=['gestational_age_weeks'])
+            computed_edd = self.calculate_expected_delivery_date()
+            if computed_edd:
+                self.expected_delivery_date = computed_edd
+            self.save(update_fields=['gestational_age_weeks', 'expected_delivery_date'])
 
 
 class DoctorProfile(models.Model):
+
     """
     Extended profile for doctors (médicos).
     Requires CRM validation before accessing clinical features.
