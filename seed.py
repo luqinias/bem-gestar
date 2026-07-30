@@ -123,56 +123,177 @@ for name, desc, icon in categories:
 
 print("  ✅ 6 categorias criadas")
 
-nutricao = ContentCategory.objects.get(name='Nutrição na Gestação')
-prenatal = ContentCategory.objects.get(name='Pré-natal')
+nutricao     = ContentCategory.objects.get(name='Nutrição na Gestação')
+prenatal     = ContentCategory.objects.get(name='Pré-natal')
 saude_mental = ContentCategory.objects.get(name='Saúde Mental')
+exercicios   = ContentCategory.objects.get(name='Exercícios e Movimento')
+parto        = ContentCategory.objects.get(name='Preparação para o Parto')
+amamentacao  = ContentCategory.objects.get(name='Amamentação')
 
 contents = [
+    # ── 1º Trimestre (semanas 1–13) ──────────────────────────────
     {
         'title': 'Alimentação Saudável no 1º Trimestre',
         'slug': 'alimentacao-1o-trimestre',
         'summary': 'Dicas de nutrição essenciais para as primeiras 13 semanas de gravidez.',
-        'content': 'Durante o 1º trimestre, é fundamental consumir ácido fólico, ferro e proteínas...',
+        'content': 'Durante o 1º trimestre, é fundamental consumir ácido fólico, ferro e proteínas. Priorize folhas verde-escuras, feijão, ovos e carnes magras. O ácido fólico é especialmente importante nas primeiras semanas para prevenir defeitos no tubo neural do bebê.',
         'category': nutricao,
         'week_start': 1, 'week_end': 13,
         'target_risk_level': 'all',
     },
     {
+        'title': 'Enjoos na Gravidez: Como Aliviar',
+        'slug': 'enjoos-gravidez',
+        'summary': 'Estratégias práticas para lidar com as náuseas do início da gestação.',
+        'content': 'As náuseas matinais são comuns no 1º trimestre. Coma pequenas porções a cada 2–3 horas e evite odores fortes. Gengibre em chá ou biscoito pode ajudar. Se os enjoos forem intensos e persistentes, informe sua equipe de saúde.',
+        'category': nutricao,
+        'week_start': 1, 'week_end': 13,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Sua Primeira Consulta de Pré-natal',
+        'slug': 'primeira-consulta-prenatal',
+        'summary': 'O que esperar e como se preparar para a primeira consulta gestacional.',
+        'content': 'Na primeira consulta o médico confirma a gestação, calcula a data provável do parto e solicita exames de rotina (hemograma, tipagem sanguínea, glicemia, urina e infecções). Leve documentos e anote suas dúvidas com antecedência.',
+        'category': prenatal,
+        'week_start': 1, 'week_end': 13,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Ácido Fólico: Por que é Tão Importante',
+        'slug': 'acido-folico-gestacao',
+        'summary': 'A importância da suplementação de ácido fólico desde antes da gravidez.',
+        'content': 'O ácido fólico (vitamina B9) é essencial para a formação do sistema nervoso do bebê. A suplementação deve começar pelo menos 3 meses antes da gestação e continuar até o fim do 1º trimestre. A dose usual é de 400 a 800 mcg/dia conforme orientação médica.',
+        'category': nutricao,
+        'week_start': 1, 'week_end': 13,
+        'target_risk_level': 'all',
+    },
+
+    # ── 2º Trimestre (semanas 14–27) ─────────────────────────────
+    {
         'title': 'Exames do Pré-natal: 2º Trimestre',
         'slug': 'exames-prenatal-2o-trimestre',
         'summary': 'Quais exames são solicitados entre a 14ª e 27ª semana gestacional.',
-        'content': 'O 2º trimestre inclui a morfológica do 2º trimestre, hemograma completo...',
+        'content': 'O 2º trimestre inclui a ultrassonografia morfológica (entre 20–24 semanas), hemograma completo, glicemia de jejum e o teste de tolerância à glicose (entre 24–28 semanas). Esses exames avaliam o desenvolvimento fetal e rastreiam diabetes gestacional.',
         'category': prenatal,
         'week_start': 14, 'week_end': 27,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Exercícios Seguros para Gestantes',
+        'slug': 'exercicios-seguros-gestantes',
+        'summary': 'Atividades físicas recomendadas e como praticar com segurança na gravidez.',
+        'content': 'Caminhadas leves, hidroginástica e yoga para gestantes são ótimas opções no 2º trimestre. A atividade física melhora a circulação, reduz inchaços e favorece o bem-estar emocional. Evite atividades de impacto e sempre converse com sua equipe de saúde antes de iniciar.',
+        'category': exercicios,
+        'week_start': 14, 'week_end': 27,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Movimentos do Bebê: Quando Sentir e O Que Observar',
+        'slug': 'movimentos-fetais',
+        'summary': 'Entenda quando os movimentos fetais começam e como monitorá-los.',
+        'content': 'A maioria das gestantes começa a sentir movimentos entre a 18ª e 22ª semana. No 3º trimestre, o bebê deve apresentar pelo menos 10 movimentos em 2 horas. Diminuição dos movimentos deve ser comunicada ao médico imediatamente.',
+        'category': prenatal,
+        'week_start': 14, 'week_end': 27,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Ganho de Peso Saudável na Gestação',
+        'slug': 'ganho-peso-gestacao',
+        'summary': 'Quanto é saudável ganhar de peso durante a gravidez?',
+        'content': 'O ganho de peso ideal varia conforme o IMC pré-gestacional. Gestantes com peso adequado devem ganhar entre 11 e 16 kg ao longo de toda a gestação. Não faça dietas restritivas — converse com um nutricionista para orientação individualizada.',
+        'category': nutricao,
+        'week_start': 14, 'week_end': 27,
+        'target_risk_level': 'all',
+    },
+
+    # ── 3º Trimestre (semanas 28–42) ─────────────────────────────
+    {
+        'title': 'Preparação para o Trabalho de Parto',
+        'slug': 'preparacao-trabalho-parto',
+        'summary': 'Sinais do início do trabalho de parto e quando ir à maternidade.',
+        'content': 'Os sinais incluem contrações regulares a cada 5 minutos, perda do tampão mucoso e ruptura da bolsa. Prepare sua bolsa de maternidade com antecedência. Se tiver dúvidas, entre em contato com sua equipe médica.',
+        'category': parto,
+        'week_start': 28, 'week_end': 42,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Enxoval do Bebê: O Essencial para o Início',
+        'slug': 'enxoval-bebe-essencial',
+        'summary': 'Lista com os itens indispensáveis para os primeiros dias do recém-nascido.',
+        'content': 'Para os primeiros dias você precisará de body e macacão (tamanho P e M), fraldas, lenços umedecidos, cueiros, banheira e pomada para assaduras. Evite comprar em excesso antes do nascimento — o tamanho do bebê pode surpreender.',
+        'category': parto,
+        'week_start': 28, 'week_end': 42,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Amamentação: Primeiros Passos',
+        'slug': 'amamentacao-primeiros-passos',
+        'summary': 'Como se preparar para o aleitamento materno ainda na gestação.',
+        'content': 'O leite materno oferece proteção imunológica e nutrição completa ao recém-nascido. Na gestação, informe-se sobre pega correta e posições de amamentação. Grupos de apoio ao aleitamento podem ajudar muito no início.',
+        'category': amamentacao,
+        'week_start': 28, 'week_end': 42,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Desconfortos do 3º Trimestre e Como Aliviar',
+        'slug': 'desconfortos-3o-trimestre',
+        'summary': 'Dores lombares, inchaços e insônia: estratégias para o fim da gestação.',
+        'content': 'No 3º trimestre são comuns dores lombares, inchaço nas pernas, azia e dificuldade para dormir. Use travesseiro entre os joelhos ao deitar, eleve os pés e reduza o sódio para o inchaço. Para a azia, evite refeições volumosas à noite.',
+        'category': exercicios,
+        'week_start': 28, 'week_end': 42,
+        'target_risk_level': 'all',
+    },
+
+    # ── Conteúdos gerais (qualquer semana) ───────────────────────
+    {
+        'title': 'Ansiedade e Gestação: Cuidando da Saúde Mental',
+        'slug': 'ansiedade-gestacao',
+        'summary': 'Como reconhecer e lidar com a ansiedade durante a gravidez.',
+        'content': 'A gestação é um período de grandes mudanças emocionais. Sentir ansiedade é normal, mas quando persiste e atrapalha o dia a dia, é importante buscar ajuda. Acompanhamento psicológico durante a gestação é seguro e muito benéfico.',
+        'category': saude_mental,
+        'week_start': None, 'week_end': None,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Hidratação na Gestação',
+        'slug': 'hidratacao-gestacao',
+        'summary': 'A importância de se manter hidratada durante toda a gravidez.',
+        'content': 'Durante a gestação a necessidade de líquidos aumenta. O ideal é consumir cerca de 2 a 3 litros de água por dia. A boa hidratação previne infecções urinárias, melhora a circulação e contribui para a saúde do líquido amniótico.',
+        'category': nutricao,
+        'week_start': None, 'week_end': None,
+        'target_risk_level': 'all',
+    },
+    {
+        'title': 'Sono na Gestação: Dicas para Noites Mais Tranquilas',
+        'slug': 'sono-gestacao',
+        'summary': 'Como dormir melhor durante a gravidez em cada trimestre.',
+        'content': 'Dormir de lado (preferencialmente do lado esquerdo) é recomendado a partir do 2º trimestre para melhorar a circulação. Use travesseiros de suporte para a barriga e entre os joelhos. Evite telas antes de dormir e mantenha horários regulares.',
+        'category': saude_mental,
+        'week_start': None, 'week_end': None,
         'target_risk_level': 'all',
     },
     {
         'title': 'Controle da Pressão na Gestação de Alto Risco',
         'slug': 'controle-pressao-alto-risco',
         'summary': 'Como monitorar e controlar a pressão arterial em gestações de alto risco.',
-        'content': 'Gestantes com hipertensão precisam monitorar a PA diariamente...',
+        'content': 'Gestantes com hipertensão precisam monitorar a PA diariamente. Sinais de alerta: PA acima de 140/90 mmHg, inchaço repentino, dor de cabeça intensa e visão turva. Nesses casos procure atendimento médico imediatamente.',
         'category': prenatal,
         'week_start': None, 'week_end': None,
         'target_risk_level': 'high',
     },
-    {
-        'title': 'Ansiedade e Gestação: Cuidando da Saúde Mental',
-        'slug': 'ansiedade-gestacao',
-        'summary': 'Como reconhecer e lidar com a ansiedade durante a gravidez.',
-        'content': 'A gestação é um período de grandes mudanças emocionais...',
-        'category': saude_mental,
-        'week_start': None, 'week_end': None,
-        'target_risk_level': 'all',
-    },
 ]
 
+created_count = 0
 for data in contents:
-    EducationalContent.objects.get_or_create(
+    _, created = EducationalContent.objects.get_or_create(
         slug=data['slug'],
         defaults=data,
     )
+    if created:
+        created_count += 1
 
-print("  ✅ 4 conteúdos educativos criados")
+print(f'  16 conteudos educativos configurados ({created_count} novo(s), {EducationalContent.objects.count()} total)')
 
 print("\n📅 Criando consultas de teste...")
 patient_user = User.objects.get(email='paciente@bemgestar.com')

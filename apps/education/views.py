@@ -172,3 +172,58 @@ class EducationalContentBySlugView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
     queryset = EducationalContent.objects.filter(is_published=True)
     lookup_field = 'slug'
+
+
+@extend_schema(
+    tags=_TAG,
+    summary='Recomendações da Home (2 conteúdos personalizados)',
+    description=(
+        'Retorna até 2 conteúdos educativos filtrados pela semana gestacional '
+        'e perfil de risco da paciente autenticada. '
+        'A seleção rotaciona diariamente de forma determinística.'
+    ),
+)
+class HomeRecommendationsView(generics.ListAPIView):
+    """
+    GET /api/education/contents/home-recommendations/
+    Returns up to 2 personalised educational contents for the patient home screen.
+    Rotation: deterministic daily shuffle using (patient_id + day_of_year) as seed.
+    """
+    serializer_class = EducationalContentListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None  # never paginate — always returns ≤2 items
+
+    def get_queryset(self):
+        import random
+        import datetime
+
+        user = self.request.user
+        qs = EducationalContent.objects.filter(is_published=True)
+
+        if user.is_patient:
+            try:
+                profile = user.patient_profile
+                week = profile.gestational_age_weeks
+                if week:
+                    qs = qs.filter(models_week_filter(week))
+
+                # Include risk-appropriate content
+                from apps.monitoring.models import RiskScore
+                try:
+                    latest_score = RiskScore.objects.filter(patient=user).latest()
+                    risk_level = latest_score.risk_level
+                    qs = qs.filter(target_risk_level__in=['all', risk_level])
+                except RiskScore.DoesNotExist:
+                    qs = qs.filter(target_risk_level__in=['all', 'low'])
+            except Exception:
+                # If no profile, return general content (no week filter)
+                qs = qs.filter(target_risk_level='all')
+
+        # Daily deterministic rotation:
+        # Same patient sees same 2 cards all day, different cards next day.
+        day_of_year = datetime.date.today().timetuple().tm_yday
+        seed = user.id * 1000 + day_of_year
+        items = list(qs.select_related('category'))
+        random.Random(seed).shuffle(items)
+        return items[:2]
+
