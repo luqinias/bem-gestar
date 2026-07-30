@@ -436,6 +436,7 @@ def _create_clinical_notification(patient, clinical_alert, notif_severity):
 
     doctor_user = _linked_doctor_user(patient)
     if doctor_user:
+
         name = patient.name
         Notification.objects.create(
             recipient=doctor_user,
@@ -446,3 +447,43 @@ def _create_clinical_notification(patient, clinical_alert, notif_severity):
             message=f'{name}: {clinical_alert.reason}',
             clinical_alert=clinical_alert,
         )
+
+
+def reevaluate_patient_health_status(patient, deleted_vs_id=None, deleted_symptom_id=None):
+    """
+    Recalculates risk score and resolves obsolete alerts after vital sign or symptom deletion.
+    """
+    from apps.monitoring.models import VitalSign, Symptom, RiskScore, ClinicalAlert
+
+    latest_vs = VitalSign.objects.filter(patient=patient).order_by('-recorded_at').first()
+    latest_sym = Symptom.objects.filter(patient=patient).order_by('-recorded_at').first()
+
+
+    if latest_vs or latest_sym:
+        result = calculate_risk_score(vital_sign=latest_vs, symptom=latest_sym, patient=patient)
+        RiskScore.objects.create(
+            patient=patient,
+            score=result['score'],
+            risk_level=result['risk_level'],
+            contributing_factors=result['contributing_factors'],
+        )
+    else:
+        RiskScore.objects.create(
+            patient=patient,
+            score=0,
+            risk_level='low',
+            contributing_factors={},
+        )
+
+    # Resolve active alerts associated with the deleted vital sign or symptom
+    active_alerts = ClinicalAlert.objects.filter(patient=patient, status=ClinicalAlert.Status.ACTIVE)
+    for alert in active_alerts:
+        if alert.related_vital_sign_id is None and alert.related_symptom_id is None:
+            alert.status = ClinicalAlert.Status.RESOLVED
+            alert.save()
+        elif deleted_vs_id and alert.related_vital_sign_id == deleted_vs_id:
+            alert.status = ClinicalAlert.Status.RESOLVED
+            alert.save()
+        elif deleted_symptom_id and alert.related_symptom_id == deleted_symptom_id:
+            alert.status = ClinicalAlert.Status.RESOLVED
+            alert.save()

@@ -82,13 +82,21 @@ class VitalSignListCreateView(generics.ListCreateAPIView):
         self.request._new_vital_sign = vital_sign
 
 
-@extend_schema(tags=_TAG, summary='Detalhe de Sinal Vital')
-class VitalSignDetailView(generics.RetrieveAPIView):
+from .services import calculate_risk_score, check_and_create_alerts, run_clinical_rules, reevaluate_patient_health_status
+
+
+@extend_schema(tags=_TAG, summary='Detalhe ou Exclusão de Sinal Vital')
+class VitalSignDetailView(generics.RetrieveDestroyAPIView):
     """
-    GET /api/monitoring/vital-signs/{id}/
+    GET    /api/monitoring/vital-signs/{id}/
+    DELETE /api/monitoring/vital-signs/{id}/  — patient deletes own vital sign
     """
     serializer_class = VitalSignSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrDoctor]
+
+    def get_permissions(self):
+        if self.request.method == 'DELETE':
+            return [IsPatient(), IsOwnerOrDoctor()]
+        return [IsAuthenticated(), IsOwnerOrDoctor()]
 
     def get_queryset(self):
         # Guard for schema generation (drf-spectacular)
@@ -105,6 +113,12 @@ class VitalSignDetailView(generics.RetrieveAPIView):
             except Exception:
                 return VitalSign.objects.none()
         return VitalSign.objects.none()
+
+    def perform_destroy(self, instance):
+        patient = instance.patient
+        vs_id = instance.id
+        instance.delete()
+        reevaluate_patient_health_status(patient, deleted_vs_id=vs_id)
 
 
 # ─────────────────────────────────────────────
@@ -164,13 +178,18 @@ class SymptomListCreateView(generics.ListCreateAPIView):
         )
 
 
-@extend_schema(tags=_TAG, summary='Detalhe de Sintoma')
-class SymptomDetailView(generics.RetrieveAPIView):
+@extend_schema(tags=_TAG, summary='Detalhe ou Exclusão de Sintoma')
+class SymptomDetailView(generics.RetrieveDestroyAPIView):
     """
-    GET /api/monitoring/symptoms/{id}/
+    GET    /api/monitoring/symptoms/{id}/
+    DELETE /api/monitoring/symptoms/{id}/  — patient deletes own symptom
     """
     serializer_class = SymptomSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrDoctor]
+
+    def get_permissions(self):
+        if self.request.method == 'DELETE':
+            return [IsPatient(), IsOwnerOrDoctor()]
+        return [IsAuthenticated(), IsOwnerOrDoctor()]
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
@@ -186,6 +205,14 @@ class SymptomDetailView(generics.RetrieveAPIView):
             except Exception:
                 return Symptom.objects.none()
         return Symptom.objects.none()
+
+    def perform_destroy(self, instance):
+        patient = instance.patient
+        sym_id = instance.id
+        instance.delete()
+        reevaluate_patient_health_status(patient, deleted_symptom_id=sym_id)
+
+
 
 
 # ─────────────────────────────────────────────
