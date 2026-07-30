@@ -42,7 +42,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     date_of_birth = models.DateField(null=True, blank=True, verbose_name='Data de nascimento')
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True, verbose_name='Foto de perfil')
 
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)  # type: ignore[assignment]
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
 
@@ -51,7 +51,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     objects = UserManager()
 
-    class Meta:
+    class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
         verbose_name = 'Usuário'
         verbose_name_plural = 'Usuários'
 
@@ -75,6 +75,8 @@ class PatientProfile(models.Model):
     """
     Extended profile for patients (gestantes).
     """
+    objects = models.Manager()
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='patient_profile')
 
     # Personal data
@@ -133,10 +135,12 @@ class PatientProfile(models.Model):
         2. Fallback: Current Date + (40 - gestational_age_weeks) weeks
         """
         from datetime import date, timedelta
-        if self.last_menstrual_period:
-            return self.last_menstrual_period + timedelta(days=280)
-        elif self.gestational_age_weeks is not None:
-            remaining_weeks = max(0, 40 - self.gestational_age_weeks)
+        lmp: date | None = getattr(self, 'last_menstrual_period', None)  # type: ignore
+        ga: int | None = getattr(self, 'gestational_age_weeks', None)  # type: ignore
+        if lmp:
+            return lmp + timedelta(days=280)
+        elif ga is not None:
+            remaining_weeks = max(0, 40 - ga)
             return date.today() + timedelta(weeks=remaining_weeks)
         return None
 
@@ -144,27 +148,28 @@ class PatientProfile(models.Model):
         # Auto-calculate expected delivery date if not explicitly set or if data changed
         computed_edd = self.calculate_expected_delivery_date()
         if computed_edd:
-            self.expected_delivery_date = computed_edd
+            self.expected_delivery_date = computed_edd  # type: ignore
         super().save(*args, **kwargs)
 
     def update_gestational_age(self):
         """Recalculate gestational age based on LMP and re-evaluate EDD."""
-        if self.last_menstrual_period:
+        lmp: date | None = getattr(self, 'last_menstrual_period', None)  # type: ignore
+        if lmp:
             from datetime import date
-            delta = date.today() - self.last_menstrual_period
-            self.gestational_age_weeks = delta.days // 7
+            delta = date.today() - lmp
+            self.gestational_age_weeks = delta.days // 7  # type: ignore
             computed_edd = self.calculate_expected_delivery_date()
             if computed_edd:
-                self.expected_delivery_date = computed_edd
+                self.expected_delivery_date = computed_edd  # type: ignore
             self.save(update_fields=['gestational_age_weeks', 'expected_delivery_date'])
 
 
 class DoctorProfile(models.Model):
-
     """
     Extended profile for doctors (médicos).
     Requires CRM validation before accessing clinical features.
     """
+    objects = models.Manager()
     class Specialty(models.TextChoices):
         OBSTETRICS = 'obstetrics', 'Obstetrícia'
         GYNECOLOGY = 'gynecology', 'Ginecologia'

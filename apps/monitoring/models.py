@@ -12,6 +12,7 @@ class ClinicalAlert(models.Model):
     É a entidade principal do sistema de alertas.
     As Notification apenas referenciam este modelo para evitar duplicação.
     """
+    objects = models.Manager()
 
     class Severity(models.TextChoices):
         LOW = 'low', 'Informativo'
@@ -88,6 +89,7 @@ class VitalSign(models.Model):
     """
     Registro de sinais vitais pela paciente.
     """
+    objects = models.Manager()
     patient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -138,13 +140,15 @@ class VitalSign(models.Model):
         ordering = ['-recorded_at']
 
     def __str__(self):
-        return f'Sinais Vitais de {self.patient.name} em {self.recorded_at.strftime("%d/%m/%Y %H:%M")}'
+        dt_str = getattr(self.recorded_at, 'strftime', lambda f: str)("%d/%m/%Y %H:%M")
+        return f'Sinais Vitais de {self.patient.name} em {dt_str}'
 
 
 class Symptom(models.Model):
     """
     Registro de sintomas gestacionais pela paciente.
     """
+    objects = models.Manager()
     class Severity(models.TextChoices):
         MILD = 'mild', 'Leve'
         MODERATE = 'moderate', 'Moderado'
@@ -206,6 +210,7 @@ class RiskScore(models.Model):
     Score de risco gestacional calculado automaticamente pelo sistema.
     Não pode ser alterado pelo usuário.
     """
+    objects = models.Manager()
     class RiskLevel(models.TextChoices):
         LOW = 'low', 'Baixo'
         MEDIUM = 'medium', 'Médio'
@@ -251,6 +256,7 @@ class Notification(models.Model):
     row for the patient AND a separate row for her linked doctor, each with
     its own copy and its own read status — no row is shared between users.
     """
+    objects = models.Manager()
     class NotificationType(models.TextChoices):
         CLINICAL_ALERT = 'clinical_alert', 'Alerta Clínico'
         APPOINTMENT_SCHEDULED = 'appointment_scheduled', 'Consulta Agendada'

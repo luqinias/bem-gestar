@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.models import DoctorProfile, PatientProfile
 from apps.accounts.permissions import IsPatientOrValidatedDoctor
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer, SendMessageSerializer
@@ -60,7 +61,6 @@ class StartConversationView(APIView):
         except User.DoesNotExist:
             # Check if other_user_id corresponds to a DoctorProfile ID
             try:
-                from apps.accounts.models import DoctorProfile
                 doctor_profile = DoctorProfile.objects.get(pk=other_user_id)
                 other_user = doctor_profile.user
             except DoctorProfile.DoesNotExist:

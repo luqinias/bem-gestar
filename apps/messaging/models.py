@@ -11,6 +11,8 @@ class Conversation(models.Model):
     A conversation thread between a patient and a doctor.
     Only one conversation per patient-doctor pair.
     """
+    objects = models.Manager()
+    messages: models.Manager
     patient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -49,6 +51,7 @@ class Message(models.Model):
     A single message in a conversation.
     Supports offline queuing via 'pending' status.
     """
+    objects = models.Manager()
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pendente (offline)'
         SENT = 'sent', 'Enviada'
@@ -93,7 +96,7 @@ class Message(models.Model):
 
     def mark_as_read(self):
         if not self.read:
-            self.read = True
-            self.read_at = timezone.now()
-            self.status = self.Status.READ
+            self.read = True  # type: ignore
+            self.read_at = timezone.now()  # type: ignore
+            self.status = str(self.Status.READ)  # type: ignore
             self.save(update_fields=['read', 'read_at', 'status'])

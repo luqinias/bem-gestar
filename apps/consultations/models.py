@@ -10,6 +10,7 @@ class Consultation(models.Model):
     """
     Consultas agendadas pelo médico, visíveis e canceláveis pela paciente.
     """
+    objects = models.Manager()
     class Status(models.TextChoices):
         SCHEDULED = 'scheduled', 'Agendada'
         COMPLETED = 'completed', 'Realizada'
@@ -67,13 +68,14 @@ class Consultation(models.Model):
         ordering = ['-scheduled_date']
 
     def __str__(self):
-        return f'Consulta: {self.patient.name} com Dr(a). {self.doctor.name} — {self.scheduled_date.strftime("%d/%m/%Y %H:%M")}'
+        dt_str = getattr(self.scheduled_date, 'strftime', lambda f: str)( "%d/%m/%Y %H:%M" )
+        return f'Consulta: {self.patient.name} com Dr(a). {self.doctor.name} — {dt_str}'
 
     def cancel(self, cancelled_by, reason=''):
-        self.status = self.Status.CANCELLED
+        self.status = str(self.Status.CANCELLED)  # type: ignore
         self.cancelled_by = cancelled_by
-        self.cancellation_reason = reason
-        self.cancelled_at = timezone.now()
+        self.cancellation_reason = str(reason)  # type: ignore
+        self.cancelled_at = timezone.now()  # type: ignore
         self.save(update_fields=['status', 'cancelled_by', 'cancellation_reason', 'cancelled_at'])
 
 
@@ -81,6 +83,7 @@ class Prescription(models.Model):
     """
     Receitas digitais emitidas pelo médico, acessíveis pela paciente.
     """
+    objects = models.Manager()
     class PrescriptionType(models.TextChoices):
         MEDICATION = 'medication', 'Medicação'
         EXAM = 'exam', 'Exame'
@@ -136,6 +139,7 @@ class ExamRequest(models.Model):
     """
     Solicitações de exames pelo médico, visíveis pela paciente.
     """
+    objects = models.Manager()
     class Priority(models.TextChoices):
         ROUTINE = 'routine', 'Rotina'
         URGENT = 'urgent', 'Urgente'

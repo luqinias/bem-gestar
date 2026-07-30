@@ -39,6 +39,8 @@ class Command(BaseCommand):
 
             created_count += len(notifs)
 
+        success_style = getattr(self.style, 'SUCCESS', lambda x: x)
         self.stdout.write(
-            self.style.SUCCESS(f'Sucesso: {created_count} lembretes de consulta processados/criados.')
+            success_style(f'Sucesso: {created_count} lembretes de consulta processados/criados.')
         )
+
